@@ -1,0 +1,181 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Introduction}
+
+This is a literate programming solution to the Day 1
+problem of Advent of Code 2016.  The problem statement
+is available at the following URL:
+\url{http://adventofcode.com/2016/day/1}
+
+\section{Solution outline}
+
+In every solution, I will try to include an outline to give
+the reader a better sense of what is about to come.
+
+For the Day 1 problem, we shall:
+
+\begin{itemize}
+  \item convert the string of direction instructions into a vector of values
+  that capture the change in orientation, and the number of steps to take;
+  \item use the direction instructions to update an orientation vector
+  and a position vector;
+  \item sum the absolute values of the $x$ and $y$ coordinates of the final
+  position to obtain the Manhattan distance from the origin.
+\end{itemize}
+
+
+\section{Data structures}
+
+The problem is small and simple enough that we don't
+need data structures, but one of my goals in doing these
+exercises is to get more familiar with Rust's facilities,
+so let's create a type for a direction instruction.
+
+[[Instr]] captures the direction of the rotation to execute,
+and the number of blocks to travel.
+
+<<type definitions>>=
+enum Instr {
+    L(isize),
+    R(isize)
+}
+@
+
+\section{Parsing the data}
+
+The next logical step in our solution is to transform the
+problem string into a sequence of [[Instr]].  We take the
+``lazy'' approach, and split on the substring [[", "]], giving us
+an iterator of the instructions as [[&str]] chunks.
+
+In Rust, we cannot do random indexing in a [[&str]], and
+so we need to use the [[.chars()]] method to obtain an
+object that allows us to inspect the first character.
+If that character is `R', we push a right-turn instruction,
+and if it's `L', we push a left-turn instruction.
+
+I have decided to be lazy, and if there is an error in the input
+(e.g., the chunk is empty or does not begin with an `L' or and `R'),
+I return the empty vector.  A better solution would perform
+more solid error handling.
+
+<<functions>>=
+fn parse(s: &str) -> Vec<Instr> {
+    let mut instrs = Vec::new();
+    for chunk in s.split(", ") {
+        let mut chars = chunk.chars();
+        match chars.nth(0) {
+            Some('R') => {
+                let numeral = String::from_iter(chars);
+                instrs.push(Instr::R(numeral.parse().unwrap()));
+            }
+            Some('L') => {
+                let numeral = String::from_iter(chars);
+                instrs.push(Instr::L(numeral.parse().unwrap()));
+            }
+            _ => { return vec![]; }
+        }
+    }
+    return instrs;
+}
+@
+
+
+\section{Computing the distance}
+
+Once we have our list of instructions, finding the
+Manhattan distance is rather easy.  We first establish
+a list\footnote{In this section, we use the word
+\emph{list} to mean a collection of Rust values, and
+the word \emph{vector} to mean a pair of $x$ and $y$
+coordinates.} of orientations.  When looking north
+(the starting orientation), the orientation vector
+is $\langle 0, 1 \rangle$.  The values of that vector
+are used to update the position.
+
+Suppose an orientation vector $\langle ox, oy \rangle$, the current
+position $\langle x, y \rangle$, and the distance to walk, $d$.  The
+new position $\langle x', y' \rangle$ is computed as follows:
+
+\[
+\langle x', y' \rangle = \langle x + (ox \cdot d), y + (oy \cdot d) \rangle
+\]
+
+The [[orientation_idx]] variable points to the correct
+vector, and is updated at every step.  Note that the
+Rust program must be compiled with optimizations, otherwise
+the subtraction can cause an integer overflow panic.
+
+I used a small chunk to update the current position;
+this is a simple abstraction facility that noweb offers.
+The code in the [[<<update position>>]] chunk will be
+inserted as-is in the appropriate places.
+
+<<functions>>=
+fn dist(instrs: &[Instr]) -> isize {
+    let orientation = vec![(0, 1), (1, 0), (0, -1), (-1, 0)];
+    let mut orientation_idx: usize = 0;
+    let mut pos = (0, 0);
+
+    for instr in instrs {
+        match *instr {
+            Instr::R(n) => {
+                orientation_idx = (orientation_idx + 1) % 4;
+                <<update position>>
+            }
+            Instr::L(n) => {
+                orientation_idx = (orientation_idx - 1) % 4;
+                <<update position>>
+            }
+        }
+    }
+    return pos.0.abs() + pos.1.abs();
+}
+@
+
+<<update position>>=
+pos.0 += n * orientation[orientation_idx].0;
+pos.1 += n * orientation[orientation_idx].1;
+@
+
+
+\section{Putting it all together}
+
+With all the pieces in place, we are ready to find
+the answer to the problem.  We use the [[concat!()]]
+macro to break the very long string over multiple lines.
+
+<<*>>=
+use std::iter::FromIterator;
+<<type definitions>>
+<<functions>>
+fn main() {
+    let instr_str = concat!(
+        "R5, R4, R2, L3, R1, R1, L4, L5, R3, ",
+        "L1, L1, R4, L2, R1, R4, R4, L2, L2, R4, ",
+        "L4, R1, R3, L3, L1, L2, R1, R5, L5, L1, ",
+        "L1, R3, R5, L1, R4, L5, R5, R1, L185, R4, ",
+        "L1, R51, R3, L2, R78, R1, L4, R188, R1, ",
+        "L5, R5, R2, R3, L5, R3, R4, L1, R2, R2, ",
+        "L4, L4, L5, R5, R4, L4, R2, L5, R2, L1, ",
+        "L4, R4, L4, R2, L3, L4, R2, L3, R3, R2, ",
+        "L2, L3, R4, R3, R1, L4, L2, L5, R4, R4, ",
+        "L1, R1, L5, L1, R3, R1, L2, R1, R1, R3, ",
+        "L4, L1, L3, R2, R4, R2, L2, R1, L5, R3, ",
+        "L3, R3, L1, R4, L3, L3, R4, L2, L1, L3, ",
+        "R2, R3, L2, L1, R4, L3, L5, L2, L4, R1, ",
+        "L4, L4, R3, R5, L4, L1, L1, R4, L2, R5, ",
+        "R1, R1, R2, R1, R5, L1, L3, L5, R2"
+    );
+    println!("{}", dist(&parse(instr_str)));
+}
+@
+
+\end{document}
