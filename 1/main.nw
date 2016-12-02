@@ -19,7 +19,7 @@ is available at the following URL:
 In every solution, I will try to include an outline to give
 the reader a better sense of what is about to come.
 
-For the Day 1 problem, we shall:
+For the Day 1a problem, we shall:
 
 \begin{itemize}
   \item convert the string of direction instructions into a vector of values
@@ -28,6 +28,18 @@ For the Day 1 problem, we shall:
   and a position vector;
   \item sum the absolute values of the $x$ and $y$ coordinates of the final
   position to obtain the Manhattan distance from the origin.
+\end{itemize}
+
+
+For the Day 1b problem:
+
+\begin{itemize}
+  \item we'll reuse the [[parse()]] function written for the
+  1a problem;
+  \item we'll apply displacements one step at a time, storing
+  each position in a set;
+  \item once we ``step'' on a position found in the set, break
+  out of the loop and apply item 3 from 1a (sum of absolutes).
 \end{itemize}
 
 
@@ -108,43 +120,63 @@ new position $\langle x', y' \rangle$ is computed as follows:
 \langle x', y' \rangle = \langle x + (ox \cdot d), y + (oy \cdot d) \rangle
 \]
 
-The [[orientation_idx]] variable points to the correct
+The [[idx]] variable points to the correct
 vector, and is updated at every step.  Note that the
 Rust program must be compiled with optimizations, otherwise
 the subtraction can cause an integer overflow panic.
 
-I used a small chunk to update the current position;
-this is a simple abstraction facility that noweb offers.
-The code in the [[<<update position>>]] chunk will be
-inserted as-is in the appropriate places.
-
 <<functions>>=
 fn dist(instrs: &[Instr]) -> isize {
     let orientation = vec![(0, 1), (1, 0), (0, -1), (-1, 0)];
-    let mut orientation_idx: usize = 0;
+    let mut idx: usize = 0;
     let mut pos = (0, 0);
 
     for instr in instrs {
-        match *instr {
-            Instr::R(n) => {
-                orientation_idx = (orientation_idx + 1) % 4;
-                <<update position>>
+        let (n, idx_update) = match *instr {
+            Instr::R(n) => (n, 1_isize),
+            Instr::L(n) => (n, -1_isize)
+        };
+        idx = ((idx as isize + idx_update) as usize) % 4;
+        pos.0 += n * orientation[idx].0;
+        pos.1 += n * orientation[idx].1;
+    }
+    return pos.0.abs() + pos.1.abs();
+}
+@
+
+
+\section{Finding the duplicate location}
+<<functions>>=
+fn dist_1b(instrs: &[Instr]) -> isize {
+    let orientation = vec![(0, 1), (1, 0), (0, -1), (-1, 0)];
+    let mut idx: usize = 0;
+    let mut pos: (isize, isize) = (0, 0);
+    let mut seen = HashSet::new();
+
+    for instr in instrs {
+        let (n, idx_update) = match *instr {
+            Instr::R(n) => (n, 1_isize),
+            Instr::L(n) => (n, -1_isize)
+        };
+        idx = ((idx as isize + idx_update) as usize) % 4;
+
+        for _ in 0 .. n {
+            pos.0 += orientation[idx].0;
+            pos.1 += orientation[idx].1;
+
+            if seen.contains(&pos) {
+                return pos.0.abs() + pos.1.abs();
             }
-            Instr::L(n) => {
-                orientation_idx = (orientation_idx - 1) % 4;
-                <<update position>>
-            }
+            seen.insert(pos);
         }
     }
     return pos.0.abs() + pos.1.abs();
 }
 @
 
-<<update position>>=
-pos.0 += n * orientation[orientation_idx].0;
-pos.1 += n * orientation[orientation_idx].1;
-@
 
+<<update position>>=
+@
 
 \section{Putting it all together}
 
@@ -154,28 +186,34 @@ macro to break the very long string over multiple lines.
 
 <<*>>=
 use std::iter::FromIterator;
+use std::collections::HashSet;
 <<type definitions>>
 <<functions>>
 fn main() {
-    let instr_str = concat!(
-        "R5, R4, R2, L3, R1, R1, L4, L5, R3, ",
-        "L1, L1, R4, L2, R1, R4, R4, L2, L2, R4, ",
-        "L4, R1, R3, L3, L1, L2, R1, R5, L5, L1, ",
-        "L1, R3, R5, L1, R4, L5, R5, R1, L185, R4, ",
-        "L1, R51, R3, L2, R78, R1, L4, R188, R1, ",
-        "L5, R5, R2, R3, L5, R3, R4, L1, R2, R2, ",
-        "L4, L4, L5, R5, R4, L4, R2, L5, R2, L1, ",
-        "L4, R4, L4, R2, L3, L4, R2, L3, R3, R2, ",
-        "L2, L3, R4, R3, R1, L4, L2, L5, R4, R4, ",
-        "L1, R1, L5, L1, R3, R1, L2, R1, R1, R3, ",
-        "L4, L1, L3, R2, R4, R2, L2, R1, L5, R3, ",
-        "L3, R3, L1, R4, L3, L3, R4, L2, L1, L3, ",
-        "R2, R3, L2, L1, R4, L3, L5, L2, L4, R1, ",
-        "L4, L4, R3, R5, L4, L1, L1, R4, L2, R5, ",
-        "R1, R1, R2, R1, R5, L1, L3, L5, R2"
-    );
-    println!("{}", dist(&parse(instr_str)));
+    let instr_str = <<input string>>;
+    println!("1a: {}", dist(&parse(instr_str)));
+    println!("1b: {}", dist_1b(&parse(instr_str)));
 }
+@
+
+<<input string>>=
+concat!(
+    "R5, R4, R2, L3, R1, R1, L4, L5, R3, ",
+    "L1, L1, R4, L2, R1, R4, R4, L2, L2, R4, ",
+    "L4, R1, R3, L3, L1, L2, R1, R5, L5, L1, ",
+    "L1, R3, R5, L1, R4, L5, R5, R1, L185, R4, ",
+    "L1, R51, R3, L2, R78, R1, L4, R188, R1, ",
+    "L5, R5, R2, R3, L5, R3, R4, L1, R2, R2, ",
+    "L4, L4, L5, R5, R4, L4, R2, L5, R2, L1, ",
+    "L4, R4, L4, R2, L3, L4, R2, L3, R3, R2, ",
+    "L2, L3, R4, R3, R1, L4, L2, L5, R4, R4, ",
+    "L1, R1, L5, L1, R3, R1, L2, R1, R1, R3, ",
+    "L4, L1, L3, R2, R4, R2, L2, R1, L5, R3, ",
+    "L3, R3, L1, R4, L3, L3, R4, L2, L1, L3, ",
+    "R2, R3, L2, L1, R4, L3, L5, L2, L4, R1, ",
+    "L4, L4, R3, R5, L4, L1, L1, R4, L2, R5, ",
+    "R1, R1, R2, R1, R5, L1, L3, L5, R2"
+)
 @
 
 \end{document}
