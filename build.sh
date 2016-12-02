@@ -1,4 +1,3 @@
-CURR_DAY=
 BIN_DIR="bin"
 DOC_DIR="doc"
 TMP_DIR="tmp"
@@ -7,16 +6,23 @@ mkdir -p $BIN_DIR
 mkdir -p $DOC_DIR
 mkdir -p $TMP_DIR
 
-for d in $(seq 1 $CURR_DAY); do
+build() {
     # Doc
-    noweave -index -delay $d/main.nw > $TMP_DIR/main_$d.tex
+    noweave -index -delay $1/main.nw > $TMP_DIR/main_$1.tex
     cd $TMP_DIR
-    pdflatex main_$d.tex
-    pdflatex main_$d.tex
+    pdflatex main_$1.tex
+    pdflatex main_$1.tex
     cd ..
-    mv $TMP_DIR/main_$d.pdf $DOC_DIR
+    mv $TMP_DIR/main_$1.pdf $DOC_DIR
 
     # Code
-    notangle $d/main.nw > $TMP_DIR/main_$d.rs
-    rustc -O $TMP_DIR/main_$d.rs -o $BIN_DIR/main_$d
-done
+    notangle $1/main.nw > $TMP_DIR/main_$1.rs
+    rustc -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1
+}
+
+case "$1" in
+    clean)
+        rm -rf $BIN_DIR $DOC_DIR $TMP_DIR ;;
+    *)
+        build "$1" ;;
+esac
