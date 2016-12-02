@@ -146,6 +146,17 @@ fn dist(instrs: &[Instr]) -> isize {
 
 
 \section{Finding the duplicate location}
+
+The [[dist_1b]] function is extremely similar
+to [[dist]]\footnote{Could noweb be used constructively
+to address this similarity?}, but instead of using multiplication
+to move multiple blocks in one operation, we move
+block-by-block, verifying if the position has been
+seen already.
+
+In order to break out of a nested loop, we use a
+labeled [[break]] statement (a neat feature of Rust).
+
 <<functions>>=
 fn dist_1b(instrs: &[Instr]) -> isize {
     let orientation = vec![(0, 1), (1, 0), (0, -1), (-1, 0)];
@@ -153,6 +164,7 @@ fn dist_1b(instrs: &[Instr]) -> isize {
     let mut pos: (isize, isize) = (0, 0);
     let mut seen = HashSet::new();
 
+    'outloop:
     for instr in instrs {
         let (n, idx_update) = match *instr {
             Instr::R(n) => (n, 1_isize),
@@ -165,17 +177,13 @@ fn dist_1b(instrs: &[Instr]) -> isize {
             pos.1 += orientation[idx].1;
 
             if seen.contains(&pos) {
-                return pos.0.abs() + pos.1.abs();
+                break 'outloop;
             }
             seen.insert(pos);
         }
     }
     return pos.0.abs() + pos.1.abs();
 }
-@
-
-
-<<update position>>=
 @
 
 \section{Putting it all together}
