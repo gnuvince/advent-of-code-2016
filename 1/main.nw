@@ -83,15 +83,12 @@ fn parse(s: &str) -> Vec<Instr> {
     let mut instrs = Vec::new();
     for chunk in s.split(", ") {
         let mut chars = chunk.chars();
-        match chars.nth(0) {
-            Some('R') => {
-                let numeral = String::from_iter(chars);
-                instrs.push(Instr::R(numeral.parse().unwrap()));
-            }
-            Some('L') => {
-                let numeral = String::from_iter(chars);
-                instrs.push(Instr::L(numeral.parse().unwrap()));
-            }
+        let first = chars.nth(0);
+        let numeral = String::from_iter(chars);
+        let steps = numeral.parse().unwrap();
+        match first {
+            Some('R') => { instrs.push(Instr::R(steps)); }
+            Some('L') => { instrs.push(Instr::L(steps)); }
             _ => { return vec![]; }
         }
     }
