@@ -1,0 +1,188 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Displacements}
+
+\begin{align*}
+&\begin{pmatrix}
+0 & 1 & 2 \\ 0 & 1 & 2 \\ 3 & 4 & 5
+\end{pmatrix} \\
+&\qquad\,\Uparrow \\
+\begin{pmatrix}
+0 & 0 & 1 \\ 3 & 3 & 4 \\ 6 & 6 & 7
+\end{pmatrix}
+\Leftarrow
+&\begin{pmatrix}
+0 & 1 & 2 \\ 3 & 4 & 5 \\ 6 & 7 & 8
+\end{pmatrix}
+\Rightarrow
+\begin{pmatrix}
+1 & 2 & 2 \\ 4 & 5 & 5 \\ 7 & 7 & 8
+\end{pmatrix}
+\\
+&\qquad\,\Downarrow \\
+&\begin{pmatrix}
+3 & 4 & 5 \\ 6 & 7 & 8 \\ 6 & 7 & 8
+\end{pmatrix} \\
+\end{align*}
+
+The main operation in the problem is to move up/down and
+left/right by one row or column if possible, and otherwise
+to stay put.
+
+It is not a very difficult problem, and a programmer could
+easily come up with 3--4 ways to perform write this
+transformation.  The simplest way would be to write out all
+the cases by hand; another approach would be to check the
+current position and decide whether to add/subtract 1
+(moving right/left) or 3 (moving up/down).
+
+I initially thought I'd be fancy and use modulos and
+min/max; after I failed to come up with a formula for the
+left and right movements, I realized that the approach was
+too clever for my own good, and so I've decided to go with
+listing all the cases in a lookup table.
+
+Since there are only 9 possible inputs of interest for each
+function, I write unit tests to make sure that the
+implementation works as expected.
+
+
+
+<<displacement functions>>=
+fn down(pos: usize) -> usize {
+    [3, 4, 5, 6, 7, 8, 6, 7, 8][pos]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_down() {
+    assert_eq!(3, down(0));
+    assert_eq!(4, down(1));
+    assert_eq!(5, down(2));
+    assert_eq!(6, down(3));
+    assert_eq!(7, down(4));
+    assert_eq!(8, down(5));
+    assert_eq!(6, down(6));
+    assert_eq!(7, down(7));
+    assert_eq!(8, down(8));
+}
+@
+
+<<displacement functions>>=
+fn up(pos: usize) -> usize {
+    [0, 1, 2, 0, 1, 2, 3, 4, 5][pos]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_up() {
+    assert_eq!(0, up(0));
+    assert_eq!(1, up(1));
+    assert_eq!(2, up(2));
+    assert_eq!(0, up(3));
+    assert_eq!(1, up(4));
+    assert_eq!(2, up(5));
+    assert_eq!(3, up(6));
+    assert_eq!(4, up(7));
+    assert_eq!(5, up(8));
+}
+@
+
+
+<<displacement functions>>=
+fn left(pos: usize) -> usize {
+    [0, 0, 1, 3, 3, 4, 6, 6, 7][pos]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_left() {
+    assert_eq!(0, left(0));
+    assert_eq!(0, left(1));
+    assert_eq!(1, left(2));
+    assert_eq!(3, left(3));
+    assert_eq!(3, left(4));
+    assert_eq!(4, left(5));
+    assert_eq!(6, left(6));
+    assert_eq!(6, left(7));
+    assert_eq!(7, left(8));
+}
+@
+
+<<displacement functions>>=
+fn right(pos: usize) -> usize {
+    [1, 2, 2, 4, 5, 5, 7, 8, 8][pos]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_right() {
+    assert_eq!(1, right(0));
+    assert_eq!(2, right(1));
+    assert_eq!(2, right(2));
+    assert_eq!(4, right(3));
+    assert_eq!(5, right(4));
+    assert_eq!(5, right(5));
+    assert_eq!(7, right(6));
+    assert_eq!(8, right(7));
+    assert_eq!(8, right(8));
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+<<displacement functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let mut pos = 4;
+    let lines = <<input lines>>;
+    for line in lines {
+        for c in line.chars() {
+            match c {
+                'D' => { pos = down(pos); }
+                'U' => { pos = up(pos); }
+                'L' => { pos = left(pos); }
+                'R' => { pos = right(pos); }
+                _ => { }
+            }
+        }
+        print!("{}", pos+1);
+    }
+    println!("");
+}
+
+#[cfg(test)]
+mod test {
+    use super::{up,down,left,right};
+    <<unit tests>>
+}
+@
+
+<<input lines>>=
+vec![
+"DDDURLURURUDLDURRURULLRRDULRRLRLRURDLRRDUDRUDLRDUUDRRUDLLLURLUURLRURURLRLUDDURUULDURDRUUDLLDDDRLDUULLUDURRLUULUULDLDDULRLDLURURUULRURDULLLURLDRDULLULRRRLRLRULLULRULUUULRLLURURDLLRURRUUUDURRDLURUURDDLRRLUURLRRULURRDDRDULLLDRDDDDURURLLULDDULLRLDRLRRDLLURLRRUDDDRDLLRUDLLLLRLLRUDDLUUDRLRRRDRLRDLRRULRUUDUUDULLRLUDLLDDLLDLUDRURLULDLRDDLDRUDLDDLDDDRLLDUURRUUDLLULLRLDLUURRLLDRDLRRRRUUUURLUUUULRRUDDUDDRLDDURLRLRLLRRUDRDLRLDRRRRRRUDDURUUUUDDUDUDU",
+"RLULUULRDDRLULRDDLRDUURLRUDDDUULUUUDDRDRRRLDUURDURDRLLLRDDRLURLDRRDLRLUURULUURDRRULRULDULDLRRDDRLDRUDUDDUDDRULURLULUDRDUDDDULRRRURLRRDLRDLDLLRLUULURLDRURRRLLURRRRRLLULRRRDDLRLDDUULDLLRDDRLLUUDRURLRULULRLRUULUUUUUDRURLURLDDUDDLRDDLDRRLDLURULUUDRDLULLURDLLLRRDRURUDDURRLURRDURURDLRUDRULUULLDRLRRDRLDDUDRDLLRURURLUDUURUULDURUDULRLRDLDURRLLDRDUDRUDDRLRURUDDLRRDLLLDULRRDRDRRRLURLDLURRDULDURUUUDURLDLRURRDRULLDDLLLRUULLLLURRRLLLDRRUDDDLURLRRRDRLRDLUUUDDRULLUULDURLDUUURUDRURUDRDLRRLDRURRLRDDLLLULUDDUULDURLRUDRDDD",
+"RDDRUDLRLDDDRLRRLRRLUULDRLRUUURULRRLUURLLLRLULDDLDLRLULULUUDDDRLLLUDLLRUDURUDDLLDUDLURRULLRDLDURULRLDRLDLDRDDRUDRUULLLLRULULLLDDDULUUDUUDDLDRLRRDLRLURRLLDRLDLDLULRLRDLDLRLUULLDLULRRRDDRUULDUDLUUUUDUDRLUURDURRULLDRURUDURDUULRRULUULULRLDRLRLLRRRLULURLUDULLDRLDRDRULLUUUDLDUUUDLRDULRDDDDDDDDLLRDULLUDRDDRURUDDLURRUULUURURDUDLLRRRRDUDLURLLURURLRDLDUUDRURULRDURDLDRUDLRRLDLDULRRUDRDUUDRLURUURLDLUDLLRDDRDU",
+"LLDDDDLUDLLDUDURRURLLLLRLRRLDULLURULDULDLDLLDRRDLUDRULLRUUURDRLLURDDLLUDDLRLLRDDLULRLDDRURLUDRDULLRUDDLUURULUUURURLRULRLDLDDLRDLDLLRUURDLUDRRRDDRDRLLUDDRLDRLLLRULRDLLRLRRDDLDRDDDUDUDLUULDLDUDDLRLDUULRULDLDULDDRRLUUURUUUDLRDRULDRRLLURRRDUDULDUDUDULLULLULULURLLRRLDULDULDLRDDRRLRDRLDRLUDLLLUULLRLLRLDRDDRUDDRLLDDLRULLLULRDDDLLLDRDLRULDDDLULURDULRLDRLULDDLRUDDUDLDDDUDRDRULULDDLDLRRDURLLRLLDDURRLRRULLURLRUDDLUURULULURLRUDLLLUDDURRLURLLRLLRRLDULRRUDURLLDDRLDLRRLULUULRRUURRRDULRLRLRDDRDULULUUDULLLLURULURRUDRLL",
+"UULLULRUULUUUUDDRULLRLDDLRLDDLULURDDLULURDRULUURDLLUDDLDRLUDLLRUURRUDRLDRDDRRLLRULDLLRUUULLLDLDDULDRLRURLDRDUURLURDRUURUULURLRLRRURLDDDLLDDLDDDULRUDLURULLDDRLDLUDURLLLLLRULRRLLUDRUURLLURRLLRDRLLLRRDDDRRRDLRDRDUDDRLLRRDRLRLDDDLURUUUUULDULDRRRRLUDRLRDRUDUDDRULDULULDRUUDUULLUDULRLRRURDLDDUDDRDULLUURLDRDLDDUURULRDLUDDLDURUDRRRDUDRRDRLRLULDRDRLRLRRUDLLLDDDRURDRLRUDRRDDLDRRLRRDLUURLRDRRUDRRDLDDDLRDDLRDUUURRRUULLDDDLLRLDRRLLDDRLRRRLUDLRURULLDULLLUDLDLRLLDDRDRUDLRRDDLUU"
+]
+@
+
+\end{document}

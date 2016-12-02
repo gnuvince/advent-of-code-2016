@@ -18,6 +18,7 @@ build() {
     # Code
     notangle $1/main.nw > $TMP_DIR/main_$1.rs
     rustc -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1
+    rustc --test -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1_test
 }
 
 case "$1" in
