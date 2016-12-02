@@ -106,8 +106,11 @@ a list\footnote{In this section, we use the word
 the word \emph{vector} to mean a pair of $x$ and $y$
 coordinates.} of orientations.  When looking north
 (the starting orientation), the orientation vector
-is $\langle 0, 1 \rangle$.  The values of that vector
-are used to update the position.
+is $\langle 0, 1 \rangle$.  The other orientation vectors are
+$\langle 1, 0 \rangle$ (looking east),
+$\langle 0, -1 \rangle$ (looking south), and
+$\langle -1, 0 \rangle$ (looking west).
+
 
 Suppose an orientation vector $\langle ox, oy \rangle$, the current
 position $\langle x, y \rangle$, and the distance to walk, $d$.  The
