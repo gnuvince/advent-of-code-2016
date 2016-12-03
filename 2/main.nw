@@ -10,6 +10,38 @@
 
 \begin{document}
 
+\section{Problem}
+
+In today's problems (both A and B), our goal is to
+find the code on two keypads.  To obtain the code,
+we are given six strings made up of the letters
+`U', `D', `L', and `R'; starting over the `5' key,
+we follow the instructions until the end of the string
+at which point we press the key.  If we are on an edge,
+going in the direction of the edge is a no-op.
+
+\subsection{Solution outline}
+
+The approach is pretty basic: maintain a position index,
+and update it appropriately as we read the UDLR's.
+When the whole string has been read, do a table lookup
+to obtain the ASCII character for the key.
+
+Although the keypads are two dimensional, we'll treat them
+as a uni-dimensional array.  Therefore, a $3\times3$ keypad
+is represented as follows (the subscripts are the array
+indexes).
+
+\[
+\begin{pmatrix}
+  1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9
+\end{pmatrix}
+=
+\begin{pmatrix}
+  1_0 & 2_1 & 3_2 & 4_3 & 5_4 & 6_5 & 7_6 & 8_7 & 9_8
+\end{pmatrix}
+\]
+
 \section{Displacements}
 
 \begin{align*}
