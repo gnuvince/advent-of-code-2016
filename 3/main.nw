@@ -1,0 +1,190 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Given a list of triples $\langle a, b, c \rangle$,
+we need to count the number of triples such that
+
+\begin{align}
+a+b > c \quad\wedge\quad a+c > b \quad\wedge\quad b+c > a.
+  \label{eq}
+\end{align}
+
+Based on my experience with previous problems,
+I would not be surprised that the B problem
+(which I have not yet read as I write these lines)
+will use the same input, but will alter slightly
+the compuation, e.g., finding right triangle triples.
+
+I will use this opportunity to exercise my YAGNI control:
+I won't attempt to write the function in a way
+that predicts a need that may or may never arise.
+
+\section{Solution A}
+
+The solution is going to be simple and straight-forward:
+
+\begin{enumerate}
+\item read the input and store the numbers in a vector;
+\item write a function that implements Expression \ref{eq};
+\item count the number of triples that satisfy Expression \ref{eq}.
+\end{enumerate}
+
+\subsection{Verifying triples}
+
+The implementation of the verification function is
+extremely easy; we use a vector here rather than
+a triple (e.g., [[(isize, isize, isize)]]), because
+we'll read the input file into a vector.
+
+<<verification functions>>=
+fn verify_triple(v: Vec<isize>) -> bool {
+    v[0] + v[1] > v[2] &&
+    v[0] + v[2] > v[1] &&
+    v[1] + v[2] > v[0]
+}
+@
+
+<<unit tests>>=
+use super::verify_triple;
+#[test]
+fn test_verify_a() {
+    assert_eq!(true, verify_triple(vec!(3, 4, 5)));
+    assert_eq!(true, verify_triple(vec!(4, 3, 5)));
+    assert_eq!(true, verify_triple(vec!(4, 5, 3)));
+    assert_eq!(false, verify_triple(vec!(5, 10, 25)));
+    assert_eq!(false, verify_triple(vec!(10, 5, 25)));
+    assert_eq!(false, verify_triple(vec!(10, 25, 5)));
+}
+@
+
+\section{Input A}
+
+The harder part of this problem is reading the input;
+although Rust's standard library is rich and complete,
+the parts can be a little difficult to manipulate.
+
+Since the input for this problem is quite long,
+rather than include it directly in the program,
+we save it in a file on disk (see [[3/input3.txt]]).
+
+We'll read from [[stdin]] and it'll be the job
+of the user to pipe the input into the program.
+To read from [[stdin]], we need a buffer that
+will contain a line of the input.
+
+<<local variables>>=
+let stdin = io::stdin();
+let mut buf = String::new();
+@
+
+To read a line from [[stdin]] we can use the
+[[read_line]] method; it accepts a mutable
+borrow of the buffer and fills it with the
+data, including the end-of-line character.
+
+The [[read_line]] method does \textbf{not}
+clear the buffer before reading.  It's our
+job to make sure it's empty before reading
+again.
+
+<<clear input buffer>>=
+buf.clear();
+@
+
+The return value of [[read_line]] is an [[io::Result]]:
+if a line has been read, we get the result
+[[Some(n)]] with $n > 0$; the result [[Some(0)]]
+indicates that we have reached the end of the file.
+We can use this condition to break out of the
+input loop when all the lines of input have been read.
+
+<<break if EOF>>=
+if n == 0 {
+    break;
+}
+@
+
+The input process can then be defined as follows:
+
+<<process input>>=
+while let Ok(n) = stdin.read_line(&mut buf) {
+    <<break if EOF>>
+    {
+        <<convert line to vector>>
+        <<record if possible triangle>>
+    }
+    <<clear input buffer>>
+}
+@
+
+(The middle chunks are inside a block because
+we need the input buffer to not be borrowed
+when we clear it.)
+
+The missing piece is to actually process the input line.
+We proceed in two steps: (1) we convert the line of
+characters into a vector of 3 [[isize]] values, (2) we
+verify the triple and record if it's a possible triangle.
+
+We can implement (1) by using the [[split_whitespace]]
+method to obtain an iterator of strings, and then
+use [[map]] and [[parse]] to convert those strings to
+[[isize]].
+
+<<convert line to vector>>=
+let nums = buf.split_whitespace().map(|x| x.parse::<isize>().unwrap());
+let v = nums.collect::<Vec<isize>>();
+@
+
+We accomplish (2) by calling our [[verify_triple]]
+function.  We'll need a variable to count the number
+of times it succeeded.
+
+<<local variables>>=
+let mut are_possible = 0;
+@
+
+<<record if possible triangle>>=
+if verify_triple(v) {
+    are_possible += 1;
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+<<verification functions>>
+#[cfg(not(test))]
+fn main() {
+    <<local variables>>
+    <<process input>>
+    println!("A: {}", are_possible);
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
