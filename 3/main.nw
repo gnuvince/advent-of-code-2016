@@ -161,7 +161,77 @@ if verify_triple(v) {
 }
 @
 
+\section{Problem B}
+
+So, as I predicted, the input to the B problem
+is the same, however we are not changing how we
+verify triples, we change how we \emph{select} them.
+
+We must now consider a triple to be three consecutive
+values in a \emph{column}.  Since we can't read by
+column, we'll need a new approach to doing our input.
+
+\section{Solution B}
+
+The [[verify_triple]] function from Problem A can
+be used as is, all we need to do is change our approach
+to input.  We will read 3 lines at a time to create
+3 triples
+($\langle v_0, v_3, v_6 \rangle$,
+$\langle v_1, v_4, v_7 \rangle$, and
+$\langle v_2, v_5, v_8 \rangle$)
+that we'll pass to [[verify_triple]].
+
+As a small challenge, I will try and see if I can
+implement this solution without touching the
+code for Solution A.  Fortunately, even before
+I had read the Problem B statement, I had split
+up my Solution A into more chunks than I'd done
+in the previous days; I believe it may be possible
+to add to those chunks and have an answer.
+
+Addendum: HOLY CRAP!  Not only did my solution work, it worked on
+the first try!  And I didn't have to touch anything in Solution A.
+Very happy!
+
+\section{Input B}
+
+The first thing I need are two new local variables;
+a mutable vector that will contain the numbers
+of up to three lines, and a counter for the
+number of possible vertical triangles.
+
+<<local variables>>=
+let mut vec3: Vec<isize> = Vec::new();
+let mut are_possible_v = 0;
+@
+
+When the length of [[vec3]] is 9, I can
+invoke [[verify_triple]] three times and
+then clear its content.
+
+<<record if possible triangle>>=
+if vec3.len() == 9 {
+    let v1 = vec![vec3[0], vec3[3], vec3[6]];
+    let v2 = vec![vec3[1], vec3[4], vec3[7]];
+    let v3 = vec![vec3[2], vec3[5], vec3[8]];
+    if verify_triple(v1) { are_possible_v += 1; }
+    if verify_triple(v2) { are_possible_v += 1; }
+    if verify_triple(v3) { are_possible_v += 1; }
+    vec3.clear();
+}
+@
+
+To populate [[vec3]], we can extend it with content of [[v]].
+
+<<convert line to vector>>=
+vec3.extend_from_slice(&v);
+@
+
+
 \section{Putting it all together}
+
+And now we create the main function and hope everything works out!
 
 <<*>>=
 use std::io;
@@ -171,6 +241,7 @@ fn main() {
     <<local variables>>
     <<process input>>
     println!("A: {}", are_possible);
+    println!("B: {}", are_possible_v);
 }
 @
 
