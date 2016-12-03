@@ -77,34 +77,105 @@ fn right(pos: usize) -> usize {
 @
 
 
+The function below converts a keypad position
+into the proper digit as a char; this is not
+strictly necessary for problem A, but I've added
+it after solving problem B to have more symmetry
+between the two solutions.
+
+<<display functions>>=
+fn keypad_a(pos: usize) -> char {
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9'][pos]
+}
+@
+
+
+\section{Problem B}
+
+The new keypad is fancier, but we can apply
+the same technique as before; our lookup tables
+are simply going to be larger.  We'll also create
+a function to return the proper digit; we'll use a
+lookup table for that too.
+
+<<displacement functions>>=
+fn down_b(pos: usize) -> usize {
+    [ 0,  0,  7,  0,  0,
+      0, 11, 12, 13,  0,
+     10, 16, 17, 18, 14,
+      0, 16, 22, 18,  0,
+      0,  0, 22,  0,  0][pos]
+}
+
+fn up_b(pos: usize) -> usize {
+    [ 0,  0,  2,  0,  0,
+      0,  6,  2,  8,  0,
+     10,  6,  7,  8, 14,
+      0, 11, 12, 13,  0,
+      0,  0, 17,  0,  0][pos]
+}
+
+fn left_b(pos: usize) -> usize {
+    [ 0,  0,  2,  0,  0,
+      0,  6,  6,  7,  0,
+     10, 10, 11, 12, 13,
+      0, 16, 16, 17,  0,
+      0,  0, 22,  0,  0][pos]
+}
+
+fn right_b(pos: usize) -> usize {
+    [ 0,  0,  2,  0,  0,
+      0,  7,  8,  8,  0,
+     11, 12, 13, 14, 14,
+      0, 17, 18, 18,  0,
+      0,  0, 22,  0,  0][pos]
+}
+@
+
+<<display functions>>=
+fn keypad_b(pos: usize) -> char {
+    ['.', '.', '1', '.', '.',
+     '.', '2', '3', '4', '.',
+     '5', '6', '7', '8', '9',
+     '.', 'A', 'B', 'C', '.',
+     '.', '.', 'D', '.', '.'][pos]
+}
+@
 
 \section{Putting it all together}
 
 <<*>>=
 <<displacement functions>>
+<<display functions>>
 
 #[cfg(not(test))]
 fn main() {
-    let mut pos = 4;
+    let mut posa = 4;
+    let mut posb = 11;
     let lines = <<input lines>>;
+    let mut sola = String::new();
+    let mut solb = String::new();
     for line in lines {
         for c in line.chars() {
             match c {
-                'D' => { pos = down(pos); }
-                'U' => { pos = up(pos); }
-                'L' => { pos = left(pos); }
-                'R' => { pos = right(pos); }
+                'D' => { posa = down(posa); posb = down_b(posb); }
+                'U' => { posa = up(posa); posb = up_b(posb); }
+                'L' => { posa = left(posa); posb = left_b(posb); }
+                'R' => { posa = right(posa); posb = right_b(posb); }
                 _ => { }
             }
         }
-        print!("{}", pos+1);
+        sola.push(keypad_a(posa));
+        solb.push(keypad_b(posb));
     }
-    println!("");
+    println!("A: {}", sola);
+    println!("B: {}", solb);
 }
 
 #[cfg(test)]
 mod test {
-    use super::{up,down,left,right};
+    use super::{up, down, left, right, keypad_a};
+    use super::{up_b, down_b, left_b, right_b, keypad_b};
     <<unit tests>>
 }
 @
@@ -175,7 +246,41 @@ fn test_right() {
     assert_eq!(8, right(7));
     assert_eq!(8, right(8));
 }
+
+#[test]
+fn test_keypad_a() {
+    assert_eq!('1', keypad_a(0));
+    assert_eq!('2', keypad_a(1));
+    assert_eq!('3', keypad_a(2));
+    assert_eq!('4', keypad_a(3));
+    assert_eq!('5', keypad_a(4));
+    assert_eq!('6', keypad_a(5));
+    assert_eq!('7', keypad_a(6));
+    assert_eq!('8', keypad_a(7));
+    assert_eq!('9', keypad_a(8));
+}
 @
+
+\section{}
+<<unit tests>>=
+#[test]
+fn test_keypad_b() {
+    assert_eq!('1', keypad_b(2));
+    assert_eq!('2', keypad_b(6));
+    assert_eq!('3', keypad_b(7));
+    assert_eq!('4', keypad_b(8));
+    assert_eq!('5', keypad_b(10));
+    assert_eq!('6', keypad_b(11));
+    assert_eq!('7', keypad_b(12));
+    assert_eq!('8', keypad_b(13));
+    assert_eq!('9', keypad_b(14));
+    assert_eq!('A', keypad_b(16));
+    assert_eq!('B', keypad_b(17));
+    assert_eq!('C', keypad_b(18));
+    assert_eq!('D', keypad_b(22));
+}
+@
+
 \end{appendices}
 
 \end{document}
