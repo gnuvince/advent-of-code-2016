@@ -266,6 +266,14 @@ fn test_verify_checksum() {
 
 \section{Decrypting room names (B)}
 
+To decrypt a room name, we proceed character-by-character.
+If the character $c$ is a dash, we output a space.
+If $c$ is alphabetic (i.e., in the range 97..123),
+we subtract 97 to obtain the offset in the English alphabet,
+we add the shift value and we mod 26 to obtain an
+alphabet offset in the range 0..25.  We then add
+97 again to go back into ASCII, and convert back to a character.
+
 <<functions>>=
 fn decrypt_room(s: &str, shift: u32) -> String {
     let mut out = String::new();
@@ -273,9 +281,9 @@ fn decrypt_room(s: &str, shift: u32) -> String {
         if c == '-' {
             out.push(' ');
         } else if c.is_alphabetic() {
-            let b = c as u8;
+            let letter = c as u8 - 97;
             let off = (shift % 26) as u8;
-            let c2 = (((b - 97 + off) % 26) + 97) as char;
+            let c2 = (((letter + off) % 26) + 97) as char;
             out.push(c2);
         }
     }
@@ -296,6 +304,9 @@ fn test_decrypt_room() {
 
 Like yesterday, the input is too large to
 fit in the program, so we read it from stdin.
+
+One small different, the answer for B appears
+before the answer for A.
 
 <<*>>=
 use std::cmp::Ordering;
