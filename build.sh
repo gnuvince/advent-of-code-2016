@@ -16,14 +16,19 @@ build() {
     mv $TMP_DIR/main_$1.pdf $DOC_DIR
 
     # Code
-    notangle $1/main.nw > $TMP_DIR/main_$1.rs
-    rustc -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1
-    rustc --test -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1_test
+    if [ "$2" -eq "cargo" ]; then
+        notangle $1/main.nw > $1/src/main.rs
+        cargo build --release --manifest-path $1/Cargo.toml
+    else
+        notangle $1/main.nw > $TMP_DIR/main_$1.rs
+        rustc -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1
+        rustc --test -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1_test
+    fi
 }
 
 case "$1" in
     clean)
         rm -rf $BIN_DIR $DOC_DIR $TMP_DIR ;;
     *)
-        build "$1" ;;
+        build "$1" "$2" ;;
 esac
