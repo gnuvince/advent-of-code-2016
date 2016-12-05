@@ -1,0 +1,51 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+This is the first solution that requires Cargo,
+because I needed to fetch the [[rust-crypto]]
+dependency.  I have modified the [[build.sh]]
+script; if a second optional argument is given
+and has the value [["cargo"]], Cargo is used
+for building, otherwise, the old compilation
+scheme using [[rustc]] directly still applies.
+
+\section{Problem A}
+
+
+
+\section{Putting it all together}
+
+
+<<*>>=
+use std::io;
+#[cfg(not(test))]
+fn main() {
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<unit tests>>=
+@
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}

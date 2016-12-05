@@ -1,3 +1,6 @@
 tmp
 doc
 bin
+target/
+src/
+Cargo.lock
