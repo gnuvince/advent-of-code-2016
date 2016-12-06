@@ -16,7 +16,8 @@ build() {
     mv $TMP_DIR/main_$1.pdf $DOC_DIR
 
     # Code
-    if [ "$2" -eq "cargo" ]; then
+    if [ "$2" = "cargo" ]; then
+        mkdir -p $1/src
         notangle $1/main.nw > $1/src/main.rs
         cargo build --release --manifest-path $1/Cargo.toml
     else
