@@ -1,0 +1,95 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+It's 10:30 PM, I had a bunch of other things to do,
+so I'm probably going to be extremely terse in my
+explanations.
+
+\section{Problem A}
+
+We are given a list of 8-character strings, and we
+need to extract the message by figuring out which
+letter is most common in each position.
+
+I'll use a 2D array for this purpose:
+8 buckets of 26 tallies. We'll find the index
+of the maximum tally in each of the buckets
+and we'll have our message.
+
+<<tally messages>>=
+let mut tallies: [[usize; 26]; 8] = [[0; 26]; 8];
+while stdin.read_line(&mut buf).unwrap() > 0 {
+    let mut i = 0;
+    for b in buf.trim().bytes() {
+        let index = (b - b'a') as usize;
+        tallies[i][index] += 1;
+        i += 1;
+    }
+    buf.clear();
+}
+@
+
+\section{Problem B}
+
+Same thing as with problem A, except we are
+looking for the \emph{least} common letter,
+i.e., the minimum tally in each of the
+buckets.
+
+
+\section{Putting it all together}
+
+
+<<*>>=
+use std::io;
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+
+    <<tally messages>>
+
+    let mut solution_a = String::new();
+    let mut solution_b = String::new();
+    for i in 0..8 {
+        let mut max_idx = 0;
+        let mut min_idx = 0;
+        for j in 1..26 {
+            if tallies[i][j] > tallies[i][max_idx] {
+                max_idx = j;
+            }
+            if tallies[i][j] < tallies[i][min_idx] {
+                min_idx = j;
+            }
+        }
+        solution_a.push(((max_idx + 97) as u8) as char);
+        solution_b.push(((min_idx + 97) as u8) as char);
+    }
+    println!("A: {}", solution_a);
+    println!("B: {}", solution_b);
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
