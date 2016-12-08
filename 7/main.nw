@@ -1,0 +1,210 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+We are given a list of IPv7 addresses,
+and we need to count those that support TLS.
+
+\section{Solution A}
+
+Like on day 4, we'll write our own scanner (I
+actually enjoy writing those!) and we'll need
+to know what state we're in, i.e., are we
+scanning a normal part of the IP, or a hypernet.
+
+<<type definitions>>=
+#[derive(Debug)]
+enum State {
+    Normal,
+    Hypernet
+}
+@
+
+A token is going to be a pair: the current state
+and the string that was read during that state.
+
+<<type definitions>>=
+type Token = (State, String);
+@
+
+Our scanner walks character by character; if a bracket
+is seen, we record the token if necessary (see [[<<record token>>]])
+and we switch state.  At the end of the loop,
+we must ensure to record the last characters (if any)
+into a last token.
+
+<<scanner>>=
+fn scan(s: &str) -> Vec<Token> {
+    let mut curr_state = State::Normal;
+    let mut param = String::new();
+    let mut toks = Vec::new();
+    for c in s.trim().chars() {
+        match c {
+            '[' => {
+                <<record token>>;
+                curr_state = State::Hypernet;
+            }
+            ']' => {
+                <<record token>>;
+                curr_state = State::Normal;
+            }
+            _   => { param.push(c); }
+        }
+    }
+    <<record token>>
+    return toks;
+}
+@
+
+We add a token to the output vector by making a pair
+out of the current state and the content of the parameter.
+We only do this if the parameter string is not empty.
+
+<<record token>>=
+if !param.is_empty() {
+    toks.push((curr_state, param.clone()));
+    param.clear();
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_scan() {
+    use super::scan;
+    assert_eq!(3, scan("abba[mnop]qrst").len());
+    assert_eq!(3, scan("abcd[bddb]xyyx").len());
+    assert_eq!(3, scan("aaaa[qwer]tyui").len());
+    assert_eq!(3, scan("ioxxoj[asdfgh]zxcvbn").len());
+}
+@
+
+Once we have the tokens, we check for the ABBA property.
+As with some other problems, I found the wording a little
+hard to understand, so here's my take at making the
+description clearer.
+
+\begin{itemize}
+\item An ABBA string is a string of the form $abba$
+  where $a \ne b$;
+\item An IP supports TLS if the ABBA string occurs
+  in a normal token, however;
+\item If an hypernet contains an ABBA string,
+  the IP does not support TLS, even when a normal
+  section contains an ABBA string.
+\end{itemize}
+
+To check for the ABBA string, we'll inspect four characters
+$s_0\ldots{}s_3$ at a time, making sure that $s0 = s3 \wedge s1 = s2$.
+We create a function for this purpose; the function
+accepts a slice of u8's instead of a [[&str]] mostly because
+indexing is a lot less involved (and annoying) with slices.
+
+<<check if string is abba>>=
+fn is_abba(s: &[u8]) -> bool {
+    s.len() == 4
+    && s[0] != s[1]
+    && s[0] == s[3] && s[1] == s[2]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_is_abba() {
+    use super::is_abba;
+    assert_eq!(true, is_abba("abba".as_bytes()));
+    assert_eq!(true, is_abba("xyyx".as_bytes()));
+    assert_eq!(false, is_abba("abcd".as_bytes()));
+    assert_eq!(false, is_abba("aaaa".as_bytes()));
+    assert_eq!(false, is_abba("abb".as_bytes()));
+    assert_eq!(false, is_abba("abbaa".as_bytes()));
+}
+@
+
+
+<<check tls support>>=
+fn check_tls(toks: &[Token]) -> bool {
+    let mut supports_tls = false;
+    for tok in toks {
+        match *tok {
+            (State::Normal, ref s) => {
+                for i in 0 .. s.len() - 3 {
+                    if is_abba(s[i .. i+4].as_bytes()) {
+                        supports_tls = true;
+                        break;
+                    }
+                }
+            }
+            (State::Hypernet, ref s) => {
+                for i in 0 .. s.len() - 3 {
+                    if is_abba(s[i .. i+4].as_bytes()) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return supports_tls;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_check_tls() {
+    use super::{scan, check_tls};
+    assert!(check_tls(&scan("abba[mnop]qrst")));
+    assert!(!check_tls(&scan("abcd[bddb]xyyx")));
+    assert!(!check_tls(&scan("aaaa[qwer]tyui")));
+    assert!(check_tls(&scan("ioxxoj[asdfgh]zxcvbn")));
+}
+@
+
+
+\section{Putting it all together}
+
+
+<<*>>=
+use std::io;
+<<type definitions>>
+<<scanner>>
+<<check if string is abba>>
+<<check tls support>>
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut count = 0;
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        let toks = scan(&buf);
+        if check_tls(&toks) {
+            count += 1;
+        }
+        buf.clear();
+    }
+    println!("A: {}", count);
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
