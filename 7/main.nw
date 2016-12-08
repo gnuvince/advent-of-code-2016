@@ -168,6 +168,123 @@ fn test_check_tls() {
 }
 @
 
+\section{Problem B}
+
+Problem B is similar to A, so we can build on some of
+our existing code (namely, the scanner), but we'll
+require some work to make the ABA/BAB check.
+
+The ABA/BAB check is simply this: find a string $aba$
+in a normal token, and make sure that there is a hypernet
+token containing the string $bab$.  Again, $a \ne b$.
+
+\section{Solution B}
+
+I think the easiest way to tackle the problem goes something
+like this:
+
+\begin{itemize}
+\item split the tokens into normal and hypernet vectors;
+\item if an ABA string is found in a normal token, try
+  to find the matching BAB string in one of the hypernet
+  tokens.
+\end{itemize}
+
+Let's start with the high-level picture, and then delve
+into the building blocks.
+
+Note that the vector of tokens is moved into the function
+instead of borrowed.  This will allow us to move the strings
+without having to copy them (to avoid the dreaded attempting
+to move out of borrow error message of the Rust compiler).
+
+<<solution b functions>>=
+fn check_ssl(toks: Vec<Token>) -> bool {
+    let (normals, hypernets) = split_ip(toks);
+    for normal in normals {
+        let normal = normal.as_bytes();
+        for i in 0 .. normal.len() - 2 {
+            if is_aba(i, normal) {
+                if find_bab(normal[i], normal[i+1], &hypernets) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+@
+
+We can split the vector of tokens by looking at the first
+component of the tuple and putting the associated string
+into the appropriate bucket.
+
+<<solution b functions>>=
+fn split_ip(toks: Vec<Token>) -> (Vec<String>, Vec<String>) {
+    let mut normals = Vec::new();
+    let mut hypernets = Vec::new();
+    for tok in toks {
+        match tok {
+            (State::Normal, s) => { normals.push(s); }
+            (State::Hypernet, s) => { hypernets.push(s); }
+        }
+    }
+    return (normals, hypernets);
+}
+@
+
+To check if a string is ABA, we do the obvious check;
+perhaps slightly less obvious, we assume that there
+will never be an out-of-bounds error since the loop
+that invokes this function stops 3 positions before
+the end.
+
+<<solution b functions>>=
+fn is_aba(i: usize, bytes: &[u8]) -> bool {
+    bytes[i] != bytes[i+1] && bytes[i] == bytes[i+2]
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_is_aba() {
+    use super::is_aba;
+    assert!(is_aba(0, "abacac".as_bytes()));
+    assert!(!is_aba(1, "abacac".as_bytes()));
+    assert!(is_aba(2, "abacac".as_bytes()));
+    assert!(is_aba(3, "abacac".as_bytes()));
+}
+@
+
+Finding if a hypernet contains the BAB string is not
+very hard either, however it is $O(mn)$ which should
+make most computer scientists squirm in discomfort.
+Fortunately, this is more than fast enough for the
+problem at hand, phew!
+
+<<solution b functions>>=
+fn find_bab(a: u8, b: u8, hypernets: &[String]) -> bool {
+    for hypernet in hypernets {
+        let hypernet = hypernet.as_bytes();
+        for i in 0 .. hypernet.len() - 2 {
+            if hypernet[i] == b && hypernet[i+1] == a && hypernet[i+2] == b {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_is_bab() {
+    use super::find_bab;
+    assert!(find_bab(b'a', b'b', &vec!["xyz".into(), "bab".into()]));
+    assert!(!find_bab(b'a', b'b', &vec!["xyz".into(), "aba".into()]));
+}
+@
+
 
 \section{Putting it all together}
 
@@ -178,19 +295,25 @@ use std::io;
 <<scanner>>
 <<check if string is abba>>
 <<check tls support>>
+<<solution b functions>>
 #[cfg(not(test))]
 fn main() {
     let stdin = io::stdin();
     let mut buf = String::new();
-    let mut count = 0;
+    let mut count_a = 0;
+    let mut count_b = 0;
     while stdin.read_line(&mut buf).unwrap() > 0 {
         let toks = scan(&buf);
         if check_tls(&toks) {
-            count += 1;
+            count_a += 1;
+        }
+        if check_ssl(toks) {
+            count_b += 1;
         }
         buf.clear();
     }
-    println!("A: {}", count);
+    println!("A: {}", count_a);
+    println!("B: {}", count_b);
 }
 @
 
