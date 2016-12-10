@@ -121,9 +121,16 @@ fn digit_to_usize(b: u8) -> usize {
 }
 @
 
+An important invariant of [[<<read pattern>>]]
+is that upon entry, $A$ and $B$ should be 0.
+On the first iteration, this is true thanks
+to the declarations at the beginning of the function
+For other iterations, $A$ will always be zero,
+because the \emph{Skip} state drains it.
+For $B$, we manually reset it to 0 after
+the multiplication.
+
 <<read pattern>>=
-a = 0;
-b = 0;
 while is_digit(input[i]) {
     a = 10*a + digit_to_usize(input[i]);
     i += 1;
@@ -135,6 +142,7 @@ while is_digit(input[i]) {
 }
 i += 1; // Skip ')'
 counter += a*b;
+b = 0; // For next iteration
 state = State::Skip;
 @
 
@@ -205,6 +213,11 @@ We extract a substring of length $A$ and recursively invoke
 When we get the result, we multiply it with $B$, and add that
 to the counter.  We can then skip like before.
 
+The [[count_expanded_b]] function is extremely similar
+to the previous version, in fact the only thing that is
+changed is the chunk to be expanded in the \emph{ReadPattern}
+branch, the rest is the same.
+
 <<functions>>=
 fn count_expanded_b(input: &[u8]) -> usize {
     let mut state = State::Copy;
@@ -223,9 +236,15 @@ fn count_expanded_b(input: &[u8]) -> usize {
 }
 @
 
+The new chunk for \emph{ReadPattern} is also
+extremely similar to its previous version;
+we add a couple of extra function calls to
+recursively count the expanded string, and
+alter the update to the counter.
+
+The invariants that we described earlier are the same.
+
 <<read pattern part b>>=
-a = 0;
-b = 0;
 while is_digit(input[i]) {
     a = 10*a + digit_to_usize(input[i]);
     i += 1;
@@ -239,6 +258,7 @@ i += 1; // Skip ')'
 let sub_s = get_substring(input, i, a);
 let len_sub_s = count_expanded_b(&sub_s);
 counter += len_sub_s * b;
+b = 0;  // For next iteration
 state = State::Skip;
 @
 
