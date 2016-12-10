@@ -1,0 +1,310 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+We are given a file containing letters (always upper-case)
+and expansion patterns [[(AxB)]] where [[A]] and [[B]] are
+respectively the number of characters following the pattern
+to capture, and the number of times to repeat them.
+
+The goal is to figure out how many characters the input
+expands into.
+
+\section{Solution A}
+
+Though the problem statement suggests generating the
+expanded string (and I'm 90\% sure this will be needed
+for part B), I'll implement a small state machine that
+simply counts how many characters would be generated.
+Our state machine will have a counter, and the following
+states:
+
+\begin{itemize}
+\item \emph{Copy}: we add 1 to the counter and move to the
+  next character in the input.  This is the initial state.
+  If a blank is found, we don't add 1 to the counter.
+\item \emph{ReadPattern}: when a `(' is read in the \emph{Copy}
+  state, we switch to this state and read the two numbers $A$ and $B$
+  and the `)'.  We add $A \times B$ to the counter.
+\item \emph{Skip}: we skip over $A$ characters, not counting
+  whitespace.  We do not modify the counter in this state.
+\end{itemize}
+
+When the entire string has been processed, the counter will
+contain the size of the expanded string.
+
+\subsection{Data structures}
+
+We use an enum to track the current state of the state machine.
+
+<<data structures>>=
+enum State {
+    Copy,
+    ReadPattern,
+    Skip
+}
+@
+
+\subsection{State machine}
+
+The state machine is implemented in the function
+[[count_expanded]].  The overview is given below
+and we'll fill in the code for the different states
+afterwards.
+
+<<functions>>=
+fn count_expanded(input: &[u8]) -> usize {
+    let mut counter: usize = 0;
+    let mut state = State::Copy;
+    let mut i = 0;
+    let mut a = 0;
+    let mut b = 0;
+    while i < input.len() {
+        match state {
+            State::Copy => { <<copy>> }
+            State::ReadPattern => { <<read pattern>> }
+            State::Skip => { <<skip>> }
+        }
+    }
+    return counter;
+}
+@
+
+\paragraph{Copy} As we described before, copy simply adds 1
+  to the counter when it sees a letter, doesn't add anything
+  when it sees a blank, and switches to the \emph{ReadPattern}
+  state when it sees an opening parenthesis.  The only
+  blank characters present in the input are newlines (`\textbackslash{}n').
+
+<<functions>>=
+fn is_letter(b: u8) -> bool {
+    b >= b'A' && b <= b'Z'
+}
+@
+
+<<copy>>=
+match input[i] {
+    b'('  => { state = State::ReadPattern; }
+    b'\n' => {  }
+    c if is_letter(c) => { counter += 1; }
+    _ => { panic!("invalid character at {}", i); }
+}
+i += 1;
+@
+
+\paragraph{ReadPattern} When we first enter this state, we
+  have already read the opening parenthesis.  We now need
+  to read the number $A$, the character `x', the number $B$,
+  the character `)', and switch state.
+
+  We'll create a couple of helper functions:
+  one to check that a [[u8]] is an ASCII digit,
+  another to convert that an ASCII digit into a usize.
+
+<<functions>>=
+fn is_digit(b: u8) -> bool {
+    b >= b'0' && b <= b'9'
+}
+
+fn digit_to_usize(b: u8) -> usize {
+    (b - b'0') as usize
+}
+@
+
+<<read pattern>>=
+a = 0;
+b = 0;
+while is_digit(input[i]) {
+    a = 10*a + digit_to_usize(input[i]);
+    i += 1;
+}
+i += 1; // Skip 'x'
+while is_digit(input[i]) {
+    b = 10*b + digit_to_usize(input[i]);
+    i += 1;
+}
+i += 1; // Skip ')'
+counter += a*b;
+state = State::Skip;
+@
+
+\paragraph{Skip} The value in $A$ is the number
+  of characters following the pattern that had
+  to be repeated.  We'll move forward (ignoring
+  blanks) that many number of characters.
+
+<<skip>>=
+while a != 0 {
+    if input[i] != b'\n' {
+        a -= 1;
+    }
+    i += 1;
+}
+state = State::Copy;
+@
+
+Let's use the examples given on the problem page
+to create a few unit tests.
+
+<<unit tests>>=
+#[test]
+fn test_count_expanded() {
+    use super::count_expanded;
+    assert_eq!(6, count_expanded(b"ADVENT"));
+    assert_eq!(7, count_expanded(b"A(1x5)BC"));
+    assert_eq!(9, count_expanded(b"(3x3)XYZ"));
+    assert_eq!(11, count_expanded(b"A(2x2)BCD(2x2)EFG"));
+    assert_eq!(6, count_expanded(b"(6x1)(1x3)A"));
+    assert_eq!(18, count_expanded(b"X(8x2)(3x3)ABCY"));
+}
+@
+
+\section{Problem B}
+
+It turns out I was half-right when I said problem B
+would require me to actually expand the strings.  I
+was right in that we'll need to view the content of
+an expansion, but wrong because if we try to expand
+everything, we'll run out of memory.
+
+The twist in this second part is that expansion
+patterns can be nested, and they are expanded
+until only letters are left.  The example below
+shows the difference between A and B.
+
+\begin{verbatim}
+Z(7x2)(2x2)DEZ    # Initial string
+Z(2x2)DE(2x2)DEZ  # Expansion in A
+ZDEDEDEDEZ        # Expansion in B
+\end{verbatim}
+
+\section{Solution B}
+
+I think that recursion is going to be the tool of
+choice for this part.  We'll have to create a new
+version of [[count_expanded]] that will be
+called recursively on expanded sub-strings.
+
+Like before, we start in state \emph{Count}, adding
+one to our length counter for every letter we read.
+When a `(' is read, we switch to state \emph{ReadPattern}
+as before, obtaining the values for $A$ and $B$.
+Unlike before, we \textbf{do not} add their product to the counter.
+We extract a substring of length $A$ and recursively invoke
+[[count_expanded_b]] with that sub-string.
+When we get the result, we multiply it with $B$, and add that
+to the counter.  We can then skip like before.
+
+<<functions>>=
+fn count_expanded_b(input: &[u8]) -> usize {
+    let mut state = State::Copy;
+    let mut counter: usize = 0;
+    let mut i = 0;
+    let mut a = 0;
+    let mut b = 0;
+    while i < input.len() {
+        match state {
+            State::Copy => { <<copy>> }
+            State::ReadPattern => { <<read pattern part b>> }
+            State::Skip => { <<skip>> }
+        }
+    }
+    return counter;
+}
+@
+
+<<read pattern part b>>=
+a = 0;
+b = 0;
+while is_digit(input[i]) {
+    a = 10*a + digit_to_usize(input[i]);
+    i += 1;
+}
+i += 1; // Skip 'x'
+while is_digit(input[i]) {
+    b = 10*b + digit_to_usize(input[i]);
+    i += 1;
+}
+i += 1; // Skip ')'
+let sub_s = get_substring(input, i, a);
+let len_sub_s = count_expanded_b(&sub_s);
+counter += len_sub_s * b;
+state = State::Skip;
+@
+
+The helper function [[get_substring]] helps
+us extract a substring of the appropriate length.
+Note how we use the keyword \emph{mut} in
+the declarations of [[i]] and [[len]] to allow
+the function to mutate them.
+
+<<functions>>=
+fn get_substring(input: &[u8], mut i: usize, mut len: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(len);
+    while len != 0 {
+        if input[i] != b'\n' {
+            out.push(input[i]);
+            len -= 1;
+        }
+        i += 1;
+    }
+    return out;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_count_expanded_b() {
+    use super::count_expanded_b;
+    assert_eq!(9, count_expanded_b(b"(3x3)XYZ"));
+    assert_eq!(20, count_expanded_b(b"X(8x2)(3x3)ABCY"));
+    assert_eq!(241920, count_expanded_b(
+        b"(27x12)(20x12)(13x14)(7x10)(1x12)A"));
+    assert_eq!(445, count_expanded_b(
+        b"(25x3)(3x3)ABC(2x3)XY(5x2)PQRSTX(18x9)(3x2)TWO(5x7)SEVEN"));
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+use std::io::Read;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let mut stdin = io::stdin();
+    let mut buf = Vec::new();
+    stdin.read_to_end(&mut buf);
+    println!("A: {}", count_expanded(&buf));
+    println!("B: {}", count_expanded_b(&buf));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
