@@ -1,0 +1,309 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+In today's problems, we are given a list of
+actions performed by bots.  The onl action is giving
+away two microships; the smaller is given to another
+bot or put into an output bin, and the larger one
+is given to another bot or output bin.
+
+We have to figure out which bot compared microchips
+61 and 17.
+
+Post Scriptum: I find that this problem was long,
+tedious, and just not interesting at all.  I hope
+future problems are not so un-entertaining lest I
+lose motivation to participate.
+
+\section{Solution A}
+
+\subsection{Data structures}
+
+After processing a line of the input,
+we want a value that identifies the kind of command
+and its relevant parameters.
+The two types of commands are specified in [[Command]].
+
+<<data structures>>=
+#[derive(Debug, PartialEq, Copy, Clone)]
+enum Command {
+    Assign { bot: usize, value: usize },
+    Give {
+        src: usize,            // from which bot?
+        dst1: usize,           // to which bot/bin?
+        dst1_type: ActorType,  // bot or bin?
+        dst2: usize,           // ditto
+        dst2_type: ActorType   // ditto
+    }
+}
+@
+
+Each bot and output bin is identifier by a [[usize]];
+to distinguish between a bot and an output bin, we have
+the [[ActorType]] enumeration.  We also define a [[from_str]]
+constructor since that's going to be useful.
+
+<<data structures>>=
+#[derive(Debug, PartialEq, Copy, Clone)]
+enum ActorType {
+    Bot,
+    OutputBin
+}
+
+impl ActorType {
+    fn from_str(s: &str) -> ActorType {
+        if s == "bot" {
+            ActorType::Bot
+        } else if s == "output" {
+            ActorType::OutputBin
+        } else {
+            panic!("unknown actor type: {}", s)
+        }
+    }
+}
+@
+
+
+\subsection{Parsing}
+
+The format of the file is simple and regular enough
+that a few string manipulations are all that's really
+necessary to parse the file.
+
+We'll split each line into words (using [[split_whitespace]]),
+and inspect the first word; if it's ``value'', we convert the
+2nd and 6th elements to [[usize]] and return an [[Assign]]
+command; if the first word is ``bot'', we convert the 2nd,
+7th, and 12th elements to [[usize]] and return a [[Give]]
+command.
+
+<<functions>>=
+fn parse(line: &str) -> Command {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    if words[0] == "value" {
+        let value = words[1].parse::<usize>().expect("usize");
+        let bot = words[5].parse::<usize>().expect("usize");
+        return Command::Assign { bot: bot, value: value };
+    } else if words[0] == "bot" {
+        let src = words[1].parse::<usize>().expect("usize");
+        let dst1 = words[6].parse::<usize>().expect("usize");
+        let dst1_type = ActorType::from_str(words[5]);
+        let dst2 = words[11].parse::<usize>().expect("usize");
+        let dst2_type = ActorType::from_str(words[10]);
+        return Command::Give {
+            src: src,
+            dst1: dst1,
+            dst1_type: dst1_type,
+            dst2: dst2,
+            dst2_type: dst2_type
+        };
+    } else {
+        panic!("unrecognized command: {:?}", line)
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parse() {
+    use super::{parse, Command, ActorType};
+    let x = parse("bot 127 gives low to output 1 and high to bot 180");
+    let targ = Command::Give {
+        src: 127, dst1: 1, dst2: 180,
+        dst1_type: ActorType::OutputBin,
+        dst2_type: ActorType::Bot
+    };
+    assert_eq!(x, targ);
+
+    let x = parse("bot 127 gives low to bot 1 and high to bot 180");
+    let targ = Command::Give {
+        src: 127, dst1: 1, dst2: 180,
+        dst1_type: ActorType::Bot,
+        dst2_type: ActorType::Bot
+    };
+    assert_eq!(x, targ);
+
+    let x = parse("value 123 goes to bot 999");
+    let targ = Command::Assign { bot: 999, value: 123 };
+    assert_eq!(x, targ);
+}
+@
+
+\subsection{Simulation}
+
+We create a [[Simulation]] data structure which will
+contain all the data structures necessary for exchanging
+chips.
+
+<<data structures>>=
+struct Simulation {
+    bots: HashMap<usize, Vec<usize>>, // The chips held by a bot
+    bins: HashMap<usize, Vec<usize>>, // The chips held by a bin
+    cmds: HashMap<usize, Command>,    // The give command for each bot
+    queue: VecDeque<usize>,           // The bots left to be handled
+    handler: Option<usize>            // Which bot handled 17 and 61?
+}
+
+impl Simulation {
+    <<simulation methods>>
+}
+@
+
+We need an [[execute]] method that applies a command to the
+state of the simulation.
+
+<<simulation methods>>=
+fn execute(&mut self, c: &Command) {
+    match *c {
+        <<handle assign command>>
+        <<handle give command>>
+    }
+}
+@
+
+To execute an [[Assign]] command, we add the value to
+the bot's chip vector.  If that chip vector is full after
+the insertion, we add the bot's id to the simulation queue.
+
+<<handle assign command>>=
+Command::Assign { bot, value } => {
+    let v = self.bots.entry(bot).or_insert(vec![]);
+    v.push(value);
+    if v.len() == 2 {
+        self.queue.push_back(bot);
+    }
+}
+@
+
+To execute a [[Give]] command, we find the low and high chip number
+associated with the bot (we are guaranteed that there will be two
+values in the vector) and distribute them, making sure to add
+the recipients to the queue if they now have two elements.
+
+If $min=17$ and $max=61$, we record that it was this bot that
+was reponsible for handling those values.
+
+We must remember to clear the bot's vector after we're done
+giving its chips away.
+
+<<handle give command>>=
+Command::Give
+    { src, dst1, dst1_type, dst2, dst2_type } => {
+    let min = *self.bots.get(&src).unwrap().iter().min().unwrap();
+    let max = *self.bots.get(&src).unwrap().iter().max().unwrap();
+    if min == 17 && max == 61 {
+        self.handler = Some(src);
+    }
+    self.give(dst1, dst1_type, min);
+    self.give(dst2, dst2_type, max);
+
+    let v = self.bots.entry(src).or_insert(vec![]);
+    v.clear();
+}
+@
+
+<<simulation methods>>=
+fn give(&mut self, dst: usize, ty: ActorType, val: usize) {
+    match ty {
+        ActorType::Bot => {
+            let v = self.bots.entry(dst).or_insert(vec![]);
+            v.push(val);
+            if v.len() == 2 {
+                self.queue.push_back(dst);
+            }
+        }
+        ActorType::OutputBin => {
+            let v = self.bins.entry(dst).or_insert(vec![]);
+            v.push(val);
+        }
+    }
+}
+@
+
+To simulate the system, we execute the commands of the
+members of the work queue until it is empty.
+
+<<simulation methods>>=
+fn simulate(&mut self) {
+    while let Some(bot) = self.queue.pop_front() {
+        let cmd = *self.cmds.get(&bot).unwrap();
+        self.execute(&cmd);
+    }
+}
+@
+
+\section{Solution B}
+
+I'm really pissed at this problem, so fuck explanations.
+
+<<functions>>=
+fn solve_b(sim: &Simulation) -> usize {
+    sim.bins.get(&0).unwrap()[0] *
+    sim.bins.get(&1).unwrap()[0] *
+    sim.bins.get(&2).unwrap()[0]
+}
+@
+
+<<*>>=
+use std::io;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut sim = Simulation {
+        bots: HashMap::new(),
+        bins: HashMap::new(),
+        cmds: HashMap::new(),
+        queue: VecDeque::new(),
+        handler: None
+    };
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        let cmd = parse(&buf);
+        match cmd {
+            Command::Assign { .. } => {
+                sim.execute(&cmd);
+            }
+            Command::Give { src, .. } => {
+                sim.cmds.insert(src, cmd);
+            }
+        }
+        buf.clear();
+    }
+    sim.simulate();
+    println!("A: {:?}", sim.handler);
+
+    println!("B: {}", solve_b(&sim));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
