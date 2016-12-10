@@ -1,0 +1,412 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+I was busy last evening, so I'm writing this program
+a day late.  This is not necessarily a bad thing, because
+at a glance it seems to be a little tougher than previous
+problems, and so a little extra thought won't hurt.
+
+\section{Problem A}
+
+The problem is pretty straight-forward: read a stream
+of instructions (3 instructions each with 2 numerical
+parameters) and apply them to a data structure.
+
+The data structure is a $50\times6$ pixel-addressable
+display, and the instructions can be used to turn on
+pixels and move them around.
+
+After executing all the instructions, we must print
+the number of lit pixels.
+
+\section{Solution A}
+
+\subsection{Display data structure}
+
+We'll start our solution by defining an appropriate
+data structure for the display and the different methods
+to manipulate it.
+
+We'll represent the 2D display with a one-dimensional
+vector of [[u32]].  I've made this choice for a few reasons:
+
+\begin{itemize}
+\item arrays have helpful methods defined on them only up
+  to 32 elements, yet our display contains 300 elements;
+\item using [[u32]] will make finding the solution very easy
+  by calling the [[.sum()]] method;
+\item related to the point above, using a 1D vector makes
+  using [[.sum()]] simpler (i.e., no need to sum the
+  sub-vectors and then sum those results).
+\end{itemize}
+
+The data structure will also contain the dimensions
+of the display; those fields will be [[usize]] to
+be usable in indexing operations.  We also write
+a constructor that accepts the dimensions of the
+display.
+
+<<data structure definition>>=
+struct Display {
+    pixels: Vec<u32>,
+    rows: usize,
+    cols: usize
+}
+
+impl Display {
+    fn new(rows: usize, cols: usize) -> Display {
+        let mut pixels = Vec::with_capacity(rows * cols);
+        for _ in 0 .. rows * cols {
+            pixels.push(0);
+        }
+        return Display {
+            pixels: pixels,
+            rows: rows,
+            cols: cols
+        }
+    }
+    <<display methods>>
+}
+@
+
+(Note to past Vincent: the number of rows comes first,
+then the number of columns!  I am writing this paragraph
+after having completed the problem; I spent a solid 15
+minutes hunting down a bug that was caused because I inverted
+the order of the parameters in [[new]].
+The thing is, I \emph{know} that I often get $x$ and $y$
+coordinates confused.  When we say something is $x$ by $y$,
+we typically mean it has $x$ columns and $y$ rows: $x$ and $y$
+are in their ``natural'' order, while ``column'' and ``row''
+feels backwards.
+
+In good literate programming style,
+I should have recognized that I could get tripped by this
+and added a comment discussing the order of the parameters.
+Just writing about it would have
+certainly caused me to be more careful later.)
+
+If we read the problem statement, we can see the
+different operations we'll have to support:
+
+\begin{itemize}
+\item accessing an individual pixel;
+\item getting and setting a row;
+\item getting and setting a column.
+\end{itemize}
+
+Extracting rows and columns will build upon the
+pixel access method, so let's start with this one.
+
+Our display pixels ares organized in a row-major
+format, and so the formula to fetch the pixel at
+position $(x, y)$ is $50x+y$, or more generally,
+$cols \cdot x + y$.
+
+<<display methods>>=
+fn get(&self, x: usize, y: usize) -> u32 {
+    self.pixels[self.cols * x + y]
+}
+
+fn set(&mut self, x: usize, y: usize, v: u32) {
+    self.pixels[self.cols * x + y] = v;
+}
+@
+
+Using these elementary methods, we can obtain an whole row
+or column.
+
+<<display methods>>=
+fn row(&self, r: usize) -> Vec<u32> {
+    let mut row = Vec::with_capacity(self.cols);
+    for c in 0 .. self.cols {
+        row.push(self.get(r, c));
+    }
+    return row;
+}
+
+fn col(&self, c: usize) -> Vec<u32> {
+    let mut col = Vec::with_capacity(self.rows);
+    for r in 0 .. self.rows {
+        col.push(self.get(r, c));
+    }
+    return col;
+}
+@
+
+When writing a row or a column back into the display,
+we will assume that the programmer is a nice person
+and that he'll give us a slice containing the right
+number of elements.
+
+<<display methods>>=
+fn set_row(&mut self, r: usize, row: &[u32]) {
+    for c in 0 .. self.cols {
+        self.set(r, c, row[c]);
+    }
+}
+
+fn set_col(&mut self, c: usize, col: &[u32]) {
+    for r in 0 .. self.rows {
+        self.set(r, c, col[r]);
+    }
+}
+@
+
+And finally, we implement a method that tells
+us how many pixels are turned on.
+
+<<display methods>>=
+fn pixels_on(&self) -> u32 {
+    self.pixels.iter().sum()
+}
+@
+
+\subsection{Instruction implementation}
+
+As described in the problem description, there are
+three instructions that need to be implemented.
+
+The first one, [[rect]], takes a number of columns
+and rows and turns on all the pixels.
+
+<<instruction implementation>>=
+fn rect(display: &mut Display, cols: usize, rows: usize) {
+    for c in 0 .. cols {
+        for r in 0 .. rows {
+            display.set(r, c, 1);
+        }
+    }
+}
+@
+
+For the other two instructions, rotate a row and
+rotate a column, we need a function to rotate a
+vector by a certain amount.
+
+As luck would have it, I implemented such a function
+when I was preparing a presentation on literate
+programming for my colleagues!  I'll simply copy
+the function here, the whole literate program
+can be found at \url{https://github.com/gnuvince/litprog-fnf}.
+
+<<instruction implementation>>=
+fn rotate_right<T>(v: &mut [T], offset: usize) {
+    let n = v.len();
+    v.reverse();
+    let (left, right) = v.split_at_mut(offset % n);
+    left.reverse();
+    right.reverse();
+}
+@
+
+Then to implement the two instructions, we extract
+the row or column, call [[rotate_right]], and write
+the row or column back into the display.
+
+<<instruction implementation>>=
+fn rotate_row(display: &mut Display, r: usize, offset: usize) {
+    let mut row = display.row(r);
+    rotate_right(&mut row, offset);
+    display.set_row(r, &row);
+}
+
+fn rotate_col(display: &mut Display, c: usize, offset: usize) {
+    let mut col = display.col(c);
+    rotate_right(&mut col, offset);
+    display.set_col(c, &col);
+}
+@
+
+Having written a fair number of methods and functions, let's
+use the examples from the problem page as a small unit test
+to make sure that our foundation is solid.
+
+<<unit tests>>=
+#[test]
+fn test_instructions() {
+    use super::{Display, rotate_row, rotate_col, rect};
+    let mut disp = Display::new(3, 7);
+    assert_eq!(vec![0,0,0,0,0,0,0], disp.row(0));
+    assert_eq!(vec![0,0,0,0,0,0,0], disp.row(1));
+    assert_eq!(vec![0,0,0,0,0,0,0], disp.row(2));
+
+    rect(&mut disp, 3, 2);
+    assert_eq!(vec![1,1,1,0,0,0,0], disp.row(0));
+    assert_eq!(vec![1,1,1,0,0,0,0], disp.row(1));
+    assert_eq!(vec![0,0,0,0,0,0,0], disp.row(2));
+
+    rotate_col(&mut disp, 1, 1);
+    assert_eq!(vec![1,0,1,0,0,0,0], disp.row(0));
+    assert_eq!(vec![1,1,1,0,0,0,0], disp.row(1));
+    assert_eq!(vec![0,1,0,0,0,0,0], disp.row(2));
+
+    rotate_row(&mut disp, 0, 4);
+    assert_eq!(vec![0,0,0,0,1,0,1], disp.row(0));
+    assert_eq!(vec![1,1,1,0,0,0,0], disp.row(1));
+    assert_eq!(vec![0,1,0,0,0,0,0], disp.row(2));
+
+    rotate_col(&mut disp, 1, 1);
+    assert_eq!(vec![0,1,0,0,1,0,1], disp.row(0));
+    assert_eq!(vec![1,0,1,0,0,0,0], disp.row(1));
+    assert_eq!(vec![0,1,0,0,0,0,0], disp.row(2));
+}
+@
+
+Whoo!  It works!
+
+\subsection{Reading the instructions}
+
+Now we come to the problem of reading the
+actual instructions and invoking the right
+function.  Are we going to write yet another
+scanner?  I thought about it, but since it's
+almost 11PM, I decided to use a simpler method
+instead: looking at the prefix of the string.
+
+We'll use an enum to identify the type of operation.
+
+<<data structure definition>>=
+enum Op {
+    Rect,
+    RotateRow,
+    RotateCol
+}
+@
+
+And to actually figure out the type of the operation,
+we invoke Rust's [[.starts_with()]] function.
+
+<<obtain operation type>>=
+if buf.starts_with("rect") {
+    Op::Rect
+} else if buf.starts_with("rotate row") {
+    Op::RotateRow
+} else {
+    Op::RotateCol
+}
+@
+
+To find the parameters of the operation, we'll
+use Rust's [[.match_indices()]] method.  It
+accepts a pattern (we can use [[char::is_numeric]]),
+and returns an iterator of pairs: the index
+of the match and the content of the match.
+
+Successive indices (e.g., 3, 4, 5) indicate
+the digits of a number; we just need to find
+where there is a jump greater than 1, split
+there and we get our two numbers.
+
+(Note to self: this code is ugly, complex, fragile,
+and though it was meant to save time, almost definitely
+took longer to write than a simple scanner.)
+
+<<find numbers>>=
+fn find_numbers(s: &str) -> (usize, usize) {
+    let matches: Vec<(usize, &str)> =
+        s.match_indices(char::is_numeric).collect();
+    let mut i = 1;
+    while i < matches.len() {
+        if matches[i].0 > matches[i-1].0 + 1 {
+            break;
+        }
+        i += 1;
+    }
+    let (left, right) = matches.split_at(i);
+    (submatch_to_usize(left),
+     submatch_to_usize(right))
+}
+
+fn submatch_to_usize(v: &[(usize, &str)]) -> usize {
+    let mut n = 0;
+    for &(_, c) in v {
+        n = 10*n + c.parse::<usize>().unwrap();
+    }
+    return n;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_find_numbers() {
+    use super::find_numbers;
+    assert_eq!((3, 2), find_numbers("rect 3x2"));
+    assert_eq!((1, 1), find_numbers("rotate column x=1 by 1"));
+    assert_eq!((10, 10), find_numbers("rotate row y=10 by 10"));
+}
+@
+
+\section{Problem B}
+
+As expected, we need to figure out what's written on the display.
+
+\section{Solution B}
+
+<<display methods>>=
+fn display(&self) {
+    for r in 0..self.rows {
+        for c in 0..self.cols {
+            if c % 5 == 0 { print!(" "); }
+            match self.get(r, c) {
+                0 => { print!(" "); }
+                1 => { print!("#"); }
+                _ => { panic!("invalid display, {}", c); }
+            };
+        }
+        println!("");
+    }
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+<<data structure definition>>
+<<instruction implementation>>
+<<find numbers>>
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut disp = Display::new(6, 50);
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        let op = <<obtain operation type>>;
+        let (n1, n2) = find_numbers(&buf);
+        match op {
+            Op::Rect => { rect(&mut disp, n1, n2); }
+            Op::RotateRow => { rotate_row(&mut disp, n1, n2); }
+            Op::RotateCol => { rotate_col(&mut disp, n1, n2); }
+        }
+        buf.clear();
+    }
+    println!("A: {}", disp.pixels_on());
+    println!("B:");
+    disp.display();
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
