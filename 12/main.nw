@@ -13,9 +13,10 @@
 \section{Problem A}
 
 Oh man, oh man, \textbf{oh man!}  An interpreter
-problem, yes!  All right, so we receive a list of
+problem, and for a simple assembly language too!
+All right, so we receive a list of
 Assembunny instructions, we execute them, and we
-output the value in the $a$ register.  Should be
+output the value of the $a$ register.  Should be
 easy enough (and a nice reprieve from yesterday's
 failure).
 
@@ -140,6 +141,11 @@ to run the whole program, we just invoke it in a loop,
 terminating when the $pc$ register is past the end
 of instructions.
 
+I initially tried to write it as a \emph{while} loop,
+however the expression [[self.execute(&instrs[self.pc])]]
+is refused by Rust's borrow checker, hence the reformulation
+with the local [[pc]] variable.
+
 <<cpu methods>>=
 fn run(&mut self, instrs: &[Instr]) {
     loop {
@@ -154,12 +160,12 @@ fn run(&mut self, instrs: &[Instr]) {
 
 \section{Parsing instructions}
 
-Almost done, we now need to convert a textual instruction
+Almost done, we just need to convert a textual instruction
 to the [[Instr]] structure.
 
 As we mentioned before, the registers are named by letter
 in the assembly, and by number in our [[Cpu]] object.
-Let's write a simple instruction to convert from one to
+Let's write a simple function to convert from one to
 the other.
 
 <<functions>>=
@@ -208,14 +214,13 @@ parameter to a register; if the operation succeeds, we have a
 [[CpyReg]] instruction, otherwise we have a [[CpyImm]].
 
 <<parse cpy instruction>>=
+let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
 match reg_to_num(tokens[1]) {
     Some(src) => {
-        let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
         Instr::CpyReg(src, dst)
     }
     None => {
         let imm = tokens[1].parse::<i64>().expect("cpy, not an imm");
-        let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
         Instr::CpyImm(imm, dst)
     }
 }
@@ -225,21 +230,20 @@ Similarly, the [[jnz]] instruction also needs to handle
 the case where it's used with an immediate vs. a register.
 
 <<parse jnz instruction>>=
+let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
 match reg_to_num(tokens[1]) {
     Some(reg) => {
-        let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
         Instr::JnzReg(reg, targ)
     }
     None => {
         let cond = tokens[1].parse::<i64>().expect("jnz, not an imm");
-        let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
         Instr::JnzImm(cond, targ)
     }
 }
 @
 
 
-\subsection{Testing}
+\section{Testing}
 
 Let's use the small program given as an example
 as a test.
@@ -250,17 +254,18 @@ fn test_run() {
     use super::{Cpu,Instr};
     let prog = vec![
         "cpy 41 a",
-		"inc a",
-		"inc a",
-		"dec a",
-		"jnz a 2",
-		"dec a",
+        "inc a",
+        "inc a",
+        "dec a",
+        "jnz a 2",
+        "dec a",
     ];
     let mut cpu = Cpu { regs: [0; 4], pc: 0 };
     let instrs = prog.iter().map(|x| Instr::from_str(x)).collect::<Vec<Instr>>();
     cpu.run(&instrs);
     assert_eq!(42, cpu.regs[0]);
 
+    // Add 3 and 4 together
     let prog = vec![
         "cpy 3 a",
         "cpy 4 b",
@@ -277,6 +282,12 @@ fn test_run() {
     assert_eq!(7, cpu.regs[2]);
 }
 @
+
+\section{Solution B}
+
+Wow, way to be underwhelming; create a second
+CPU record, make sure the registers have the initialization
+$(a,b,c,d) = (0,0,1,0)$ and run the same program again.
 
 \section{Putting it all together}
 
