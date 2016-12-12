@@ -1,0 +1,320 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Oh man, oh man, \textbf{oh man!}  An interpreter
+problem, yes!  All right, so we receive a list of
+Assembunny instructions, we execute them, and we
+output the value in the $a$ register.  Should be
+easy enough (and a nice reprieve from yesterday's
+failure).
+
+\section{Solution A}
+
+All right, so the plan is going to be straight-forward:
+
+\begin{enumerate}
+\item parse the lines into a vector of instructions;
+\item create a record of the state of the CPU;
+\item execute the instructions, appropriately updating the
+  state of the CPU;
+\item terminate simulation once the $pc$ register is
+  past the end of the instructions;
+\item output $a$.
+\end{enumerate}
+
+\section{The state of the CPU}
+
+Let's start with a fun data structure, the state of the CPU.
+The machine we built has four registers: $a$, $b$, $c$, and $d$.
+They contain integers, however the problem doesn't mention if
+negatives need to be supported.  We'll err on the side of caution
+and give them the type [[i64]].  We'll also add a $pc$ register
+that will point to the next instrution that needs to be executed.
+
+<<data structures>>=
+struct Cpu {
+    regs: [i64; 4], // Instead of the names a,b,c,d we'll use 0,1,2,3
+    pc: usize
+}
+
+impl Cpu {
+    <<cpu methods>>
+}
+@
+
+\section{The instructions}
+
+The problem statement specifies 4 instructions, but we'll
+implement 6: the first parameter of [[cpy]] and [[jnz]]
+can be an immediate value or a register,
+and we'll split that functionality into two instructions.
+
+<<data structures>>=
+enum Instr {
+    CpyImm(i64, usize),
+    CpyReg(usize, usize),
+    Inc(usize),
+    Dec(usize),
+    JnzImm(i64, isize),
+    JnzReg(usize, isize)
+}
+
+impl Instr {
+    <<instruction methods>>
+}
+@
+
+\section{Executing instructions}
+
+With the [[Cpu]] and [[Instr]] structures in place,
+we can already write the [[execute]] method for the CPU.
+
+<<cpu methods>>=
+fn execute(&mut self, instr: &Instr) {
+    match *instr {
+        Instr::CpyImm(val, reg) => {
+            self.regs[reg] = val;
+            self.pc += 1;
+        }
+        Instr::CpyReg(src, dst) => {
+            self.regs[dst] = self.regs[src];
+            self.pc += 1;
+        }
+        Instr::Inc(reg) => {
+            self.regs[reg] += 1;
+            self.pc += 1;
+        }
+        Instr::Dec(reg) => {
+            self.regs[reg] -= 1;
+            self.pc += 1;
+        }
+        Instr::JnzImm(imm, offset) => {
+            if imm != 0 {
+                self.adjust_pc(offset);
+            } else {
+                self.pc += 1;
+            }
+        }
+        Instr::JnzReg(reg, offset) => {
+            if self.regs[reg] != 0 {
+                self.adjust_pc(offset);
+            } else {
+                self.pc += 1;
+            }
+        }
+    }
+}
+@
+
+
+A minor technical point in Rust: we cannot add an [[usize]]
+(type for the $pc$ register) and an [[isize]] (type for
+the jump offset).  The following method takes care of
+the proper conversion.
+
+<<cpu methods>>=
+fn adjust_pc(&mut self, offset: isize) {
+    let magnitude = offset.abs() as usize();
+    if offset < 0 {
+        self.pc -= magnitude;
+    } else {
+        self.pc += magnitude;
+    }
+}
+@
+
+
+The [[execute]] method only executes one instruction;
+to run the whole program, we just invoke it in a loop,
+terminating when the $pc$ register is past the end
+of instructions.
+
+<<cpu methods>>=
+fn run(&mut self, instrs: &[Instr]) {
+    loop {
+        let pc = self.pc;
+        if pc >= instrs.len() {
+            break;
+        }
+        self.execute(&instrs[pc]);
+    }
+}
+@
+
+\section{Parsing instructions}
+
+Almost done, we now need to convert a textual instruction
+to the [[Instr]] structure.
+
+As we mentioned before, the registers are named by letter
+in the assembly, and by number in our [[Cpu]] object.
+Let's write a simple instruction to convert from one to
+the other.
+
+<<functions>>=
+fn reg_to_num(s: &str) -> Option<usize> {
+    match s {
+        "a" => Some(0),
+        "b" => Some(1),
+        "c" => Some(2),
+        "d" => Some(3),
+        _   => None
+    }
+}
+@
+
+<<instruction methods>>=
+fn from_str(s: &str) -> Instr {
+    let tokens = s.split_whitespace().collect::<Vec<&str>>();
+    match tokens[0] {
+        "cpy" => {
+            <<parse cpy instruction>>
+        }
+        "inc" => {
+            let reg = reg_to_num(tokens[1]).expect("inc, not a reg");
+            Instr::Inc(reg)
+        }
+        "dec" => {
+            let reg = reg_to_num(tokens[1]).expect("dec, not a reg");
+            Instr::Dec(reg)
+        }
+        "jnz" => {
+            <<parse jnz instruction>>
+        }
+        ins => {
+            panic!("unknown instruction: {}", ins)
+        }
+    }
+}
+@
+
+The [[cpy]] instruction is not as straight-forward to parse
+as the other instructions, so we'll give it its own chunk to
+make the previous code block shorter.
+
+To parse the [[cpy]] instruction, we try to convert the first
+parameter to a register; if the operation succeeds, we have a
+[[CpyReg]] instruction, otherwise we have a [[CpyImm]].
+
+<<parse cpy instruction>>=
+match reg_to_num(tokens[1]) {
+    Some(src) => {
+        let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
+        Instr::CpyReg(src, dst)
+    }
+    None => {
+        let imm = tokens[1].parse::<i64>().expect("cpy, not an imm");
+        let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
+        Instr::CpyImm(imm, dst)
+    }
+}
+@
+
+Similarly, the [[jnz]] instruction also needs to handle
+the case where it's used with an immediate vs. a register.
+
+<<parse jnz instruction>>=
+match reg_to_num(tokens[1]) {
+    Some(reg) => {
+        let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
+        Instr::JnzReg(reg, targ)
+    }
+    None => {
+        let cond = tokens[1].parse::<i64>().expect("jnz, not an imm");
+        let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
+        Instr::JnzImm(cond, targ)
+    }
+}
+@
+
+
+\subsection{Testing}
+
+Let's use the small program given as an example
+as a test.
+
+<<unit tests>>=
+#[test]
+fn test_run() {
+    use super::{Cpu,Instr};
+    let prog = vec![
+        "cpy 41 a",
+		"inc a",
+		"inc a",
+		"dec a",
+		"jnz a 2",
+		"dec a",
+    ];
+    let mut cpu = Cpu { regs: [0; 4], pc: 0 };
+    let instrs = prog.iter().map(|x| Instr::from_str(x)).collect::<Vec<Instr>>();
+    cpu.run(&instrs);
+    assert_eq!(42, cpu.regs[0]);
+
+    let prog = vec![
+        "cpy 3 a",
+        "cpy 4 b",
+        "dec a",
+        "inc b",
+        "jnz a -2",
+        "cpy b c"
+    ];
+    let mut cpu = Cpu { regs: [0; 4], pc: 0 };
+    let instrs = prog.iter().map(|x| Instr::from_str(x)).collect::<Vec<Instr>>();
+    cpu.run(&instrs);
+    assert_eq!(0, cpu.regs[0]);
+    assert_eq!(7, cpu.regs[1]);
+    assert_eq!(7, cpu.regs[2]);
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut cpu_a = Cpu { regs: [0; 4], pc: 0 };
+    let mut cpu_b = Cpu { regs: [0, 0, 1, 0], pc: 0 };
+    let mut instrs = Vec::new();
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        instrs.push(Instr::from_str(&buf));
+        buf.clear();
+    }
+    cpu_a.run(&instrs);
+    cpu_b.run(&instrs);
+    println!("A: {}", cpu_a.regs[0]);
+    println!("B: {}", cpu_b.regs[0]);
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
