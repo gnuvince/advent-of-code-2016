@@ -1,0 +1,336 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Hmmm, today's problem seems to fall into the category
+``we have a couple of ideas, let's mash them all together.''
+The broad lines are:
+
+\begin{itemize}
+\item in a grid of $(x,y)$ coordinates, find which points
+  are walls and which are floors;
+\item count the minimal number of steps from $(1,1)$ to
+  $(31,39)$.
+\end{itemize}
+
+\section{Solution A}
+
+I'm not exactly sure how to solve the problem today
+(more on my doubts in a second), so I'll make a plan
+that I believe will work in all cases, but which may
+not be optimal.
+
+\begin{enumerate}
+\item Set $max_x=31$ and $max_y=39$.
+\item For each pair $(x,y)$ from $(0,0)$ to
+  $(max_x, max_y)$, compute if the point is a wall or a floor.
+\item Convert the matrix of walls/floors to a graph.
+\item Perform BFS from $(1,1)$ to $(31,39)$;
+  if a path is found, print its length and exit;
+  if a path isn't found, increase $max_x$ and $max_y$
+  by 1 and go to 2.
+\end{enumerate}
+
+There are two points that make me a bit worried that
+I could be on the wrong track: (1) what guarantee do
+I have that there will ever be a path from $(1,1)$ to
+$(31,39)$? (2) if I find a path in a grid of size
+$(max_x, max_y)$, what guarantee do I have that there
+couldn't be a shorter path in a grid of size
+$(max_x, max_y')$ where $max_x < max_x' \wedge max_y < max_y'$?
+
+Let's hope the organizers of AoC thought of this
+and that everything's gonna be nice and kosher.
+
+\section{Counting bits}
+
+Let's start with an easy sub-problem, counting the number
+of bits in an integer.
+
+<<functions>>=
+fn count_bits(mut n: usize) -> usize {
+    let mut bits = 0;
+    while n > 0 {
+        bits += n & 1;
+        n >>= 1;
+    }
+    return bits;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_count_bits() {
+    use super::count_bits;
+    assert_eq!(0, count_bits(0b0));
+    assert_eq!(1, count_bits(0b1));
+    assert_eq!(1, count_bits(0b10));
+    assert_eq!(2, count_bits(0b11));
+    assert_eq!(1, count_bits(0b100));
+    assert_eq!(2, count_bits(0b101));
+    assert_eq!(2, count_bits(0b110));
+    assert_eq!(3, count_bits(0b111));
+    assert_eq!(1, count_bits(0b1000));
+    assert_eq!(2, count_bits(0b1001));
+    assert_eq!(2, count_bits(0b1010));
+}
+@
+
+\section{Classifying points}
+
+To know whether an $(x,y)$ position is a floor or a wall, we evaluate
+$x^2 + 3x + 2xy + y + y^2 + z$ and count the number of 1 bits.  (The
+variable $z$ is the input for the puzzle.)  If the number of bits
+is odd, the point is a wall; if it's even, it's a floor.  Let's create
+an enumeration to represent the kind of cell at a specific location.
+
+(The [[PartialEq]] and [[Debug]] traits are derived to permit
+unit testing.)
+
+<<data structures>>=
+#[derive(PartialEq, Debug, Clone, Copy)]
+enum Cell {
+    Floor,
+    Wall
+}
+@
+
+And now we put the formula and the bit counting together.
+
+<<functions>>=
+fn classify(x: usize, y: usize, z: usize) -> Cell {
+    let n = x*x + 3*x + 2*x*y + y + y*y + z;
+    if count_bits(n) % 2 == 0 {
+        Cell::Floor
+    } else {
+        Cell::Wall
+    }
+}
+@
+
+The following unit tests check that we match the
+cells of the example ($z=10$).
+
+<<unit tests>>=
+#[test]
+fn test_classify() {
+    use super::{Cell, classify};
+    assert_eq!(Cell::Floor, classify(0, 0, 10));
+    assert_eq!(Cell::Wall , classify(1, 0, 10));
+    assert_eq!(Cell::Floor, classify(2, 0, 10));
+    assert_eq!(Cell::Wall , classify(3, 0, 10));
+    assert_eq!(Cell::Wall , classify(4, 0, 10));
+    assert_eq!(Cell::Wall , classify(5, 0, 10));
+    assert_eq!(Cell::Wall , classify(6, 0, 10));
+    assert_eq!(Cell::Floor, classify(7, 0, 10));
+    assert_eq!(Cell::Wall , classify(8, 0, 10));
+    assert_eq!(Cell::Wall , classify(9, 0, 10));
+    assert_eq!(Cell::Floor, classify(0, 1, 10));
+    assert_eq!(Cell::Floor, classify(1, 1, 10));
+    assert_eq!(Cell::Wall , classify(2, 1, 10));
+    assert_eq!(Cell::Floor, classify(3, 1, 10));
+    assert_eq!(Cell::Floor, classify(4, 1, 10));
+    assert_eq!(Cell::Wall , classify(5, 1, 10));
+    assert_eq!(Cell::Floor, classify(6, 1, 10));
+    assert_eq!(Cell::Floor, classify(7, 1, 10));
+    assert_eq!(Cell::Floor, classify(8, 1, 10));
+    assert_eq!(Cell::Wall , classify(9, 1, 10));
+}
+@
+
+\section{Building the labyrinth}
+
+We define a labyrinth to be a 1D vector of Cells,
+along with a maximum $x$ and maximum $y$ coordinate.
+
+<<data structures>>=
+struct Labyrinth {
+    cells: Vec<Cell>,
+    max_x: usize,
+    max_y: usize
+}
+
+impl Labyrinth {
+    <<labyrinth methods>>
+}
+@
+
+
+Time for a confession: I get super confused when
+$x$ and $y$ are used as indices for arrays and matrices.
+In a cartesian plane, $(x,y)$ means ``move $x$ columns
+horizontally and $y$ rows vertically''.
+
+In a matrix, however, $A_{xy}$ means ``move $x$ \emph{rows}
+vertically, and $y$ columns horizontally''.
+
+You would not believe how often I get confused by this.
+I'll use this problem as a way to get more practice
+with those notations that I struggle so much with.
+
+\subsection{Creating the labyrinth}
+
+We first need to create the labyrinth.  How we store
+cells inside the vector is an important consideration!
+Suppose we have the following labyrinth:
+
+\begin{verbatim}
+.#
+..
+\end{verbatim}
+
+If we store this information as \texttt{[. \# . .]}, we
+call this \emph{row major}: it's the content of the
+entire first row, followed by the content of the entire
+second row.
+On the other hand, if we store the information as
+\texttt{[. . \# .]}, this is called \emph{column major}:
+we store the content of the first column followed by
+the content of the second column.
+
+If we look at the indices, we can see that in row major,
+the $y$ coordinate changes more often:
+\texttt{[(0,0) (0,1) (1,0) (1,1)]}.
+In column major, it is the $x$ coordinate that changes
+more often:
+\texttt{[(0,0) (1,0) (0,1) (1,1)]}.
+
+We can also recognize row vs. column major with the loops:
+
+\begin{verbatim}
+(* Column major *)
+for x = 1 to N
+  for y = 1 to M
+    f(x, y)
+
+(* Row major *)
+for y = 1 to M
+  for x = 1 to N
+    f(x, y)
+\end{verbatim}
+
+Since the problem gives the target $(31, 39)$ in
+(column, row) form, I will use a column major format
+for my vector of cells.
+
+The Labyrinth constructor accepts the maximum $x$ and $y$
+coordinates, along with the $z$ parameter.
+
+<<labyrinth methods>>=
+fn new(max_x: usize, max_y: usize, z: usize) -> Labyrinth {
+    let mut cells = Vec::with_capacity(max_x * max_y);
+
+    for x in 0 .. max_x {
+        for y in 0 .. max_y {
+            cells.push(classify(x, y, z));
+        }
+    }
+
+    return Labyrinth {
+        cells: cells,
+        max_x: max_x,
+        max_y: max_y
+    };
+}
+@
+
+\subsection{Accessing the cells}
+
+Okay, so now that we have our vector of cells if column-major
+format, let's write the method to get and set an element.
+
+Let's think about this: we have to move $x$ columns across
+and $y$ rows down.  A column contains $max_y$ elements.
+The content of the first column is at the indices $0 \ldots max_y - 1$,
+the second column is at $max_y \ldots 2max_y - 1$, etc.
+So this means that if we want to move over by $x$ columns,
+we need to go to index $x \cdot max_y$.
+Then to reach row $y$ of that column, we simply add $y$.
+
+So the formula to get the cell at coordinates $(x, y)$
+is $x \cdot max_y + y$.
+
+<<labyrinth methods>>=
+fn get(&self, x: usize, y: usize) -> Cell {
+    self.cells[x * self.max_y + y]
+}
+
+fn set(&mut self, x: usize, y: usize, c: Cell) {
+    self.cells[x * self.max_y + y] = c;
+}
+@
+
+
+
+We can test that our constructor and accessors work as intended
+by replicating the tests for the first 4 cells of the example.
+
+<<unit tests>>=
+#[test]
+fn test_labyrinth() {
+    use super::{Cell, Labyrinth};
+    let l = Labyrinth::new(10, 2, 10);
+    assert_eq!(Cell::Floor, l.get(0, 0));
+    assert_eq!(Cell::Wall , l.get(1, 0));
+    assert_eq!(Cell::Floor, l.get(2, 0));
+    assert_eq!(Cell::Wall , l.get(3, 0));
+    assert_eq!(Cell::Wall , l.get(4, 0));
+    assert_eq!(Cell::Wall , l.get(5, 0));
+    assert_eq!(Cell::Wall , l.get(6, 0));
+    assert_eq!(Cell::Floor, l.get(7, 0));
+    assert_eq!(Cell::Wall , l.get(8, 0));
+    assert_eq!(Cell::Wall , l.get(9, 0));
+    assert_eq!(Cell::Floor, l.get(0, 1));
+    assert_eq!(Cell::Floor, l.get(1, 1));
+    assert_eq!(Cell::Wall , l.get(2, 1));
+    assert_eq!(Cell::Floor, l.get(3, 1));
+    assert_eq!(Cell::Floor, l.get(4, 1));
+    assert_eq!(Cell::Wall , l.get(5, 1));
+    assert_eq!(Cell::Floor, l.get(6, 1));
+    assert_eq!(Cell::Floor, l.get(7, 1));
+    assert_eq!(Cell::Floor, l.get(8, 1));
+    assert_eq!(Cell::Wall , l.get(9, 1));
+}
+@
+
+
+\subsection{Creating a graph}
+
+
+\section{Putting it all together}
+
+<<*>>=
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let l = Labyrinth::new(10, 7, 10);
+    l.show();
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
