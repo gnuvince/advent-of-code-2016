@@ -306,6 +306,42 @@ fn test_labyrinth() {
 
 \subsection{Creating a graph}
 
+The cells field of the labyrinth contains useful information,
+however it's not great for performing a breadth-first search.
+Let's create an adjacency graph from that information.
+
+First, I'll add a method, [[is_floor]] that returns true
+if the cell at a given $x,y$ coordinate is a floor, and false
+if it's a wall or out of bounds.
+
+<<labyrinth methods>>=
+fn is_floor(&self, x: usize, y: usize) -> bool {
+    if x >= self.max_x || y >= self.max_y {
+        return false;
+    }
+    return self.get(x, y) == Cell::Floor;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_is_floor() {
+    use super::Labyrinth;
+    let l = Labyrinth::new(2, 2, 10);
+    assert_eq!(true, l.is_floor(0, 0));
+    assert_eq!(true, l.is_floor(0, 1));
+    assert_eq!(false, l.is_floor(1, 0));
+    assert_eq!(true, l.is_floor(1, 1));
+
+    assert_eq!(false, l.is_floor(0-1, 0));
+    assert_eq!(false, l.is_floor(0, 0-1));
+    assert_eq!(false, l.is_floor(0-1, 0-1));
+    assert_eq!(false, l.is_floor(2, 0));
+    assert_eq!(false, l.is_floor(0, 2));
+    assert_eq!(false, l.is_floor(2, 2));
+}
+@
+
 
 \section{Putting it all together}
 
@@ -315,8 +351,7 @@ fn test_labyrinth() {
 
 #[cfg(not(test))]
 fn main() {
-    let l = Labyrinth::new(10, 7, 10);
-    l.show();
+
 }
 @
 
