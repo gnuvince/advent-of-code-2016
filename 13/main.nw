@@ -35,7 +35,7 @@ not be optimal.
 \item For each pair $(x,y)$ from $(0,0)$ to
   $(max_x, max_y)$, compute if the point is a wall or a floor.
 \item Convert the matrix of walls/floors to a graph.
-\item Perform BFS from $(1,1)$ to $(31,39)$;
+\item Perform Dijkstra from $(1,1)$ to $(31,39)$;
   if a path is found, print its length and exit;
   if a path isn't found, increase $max_x$ and $max_y$
   by 1 and go to 2.
@@ -264,10 +264,6 @@ is $x \cdot max_y + y$.
 fn get(&self, x: usize, y: usize) -> Cell {
     self.cells[x * self.max_y + y]
 }
-
-fn set(&mut self, x: usize, y: usize, c: Cell) {
-    self.cells[x * self.max_y + y] = c;
-}
 @
 
 
@@ -312,7 +308,8 @@ Let's create an adjacency graph from that information.
 
 First, I'll add a method, [[is_floor]] that returns true
 if the cell at a given $x,y$ coordinate is a floor, and false
-if it's a wall or out of bounds.
+if it's a wall or out of bounds.  This will allow us to easily
+create the set of neighbors of a cell.
 
 <<labyrinth methods>>=
 fn is_floor(&self, x: usize, y: usize) -> bool {
@@ -343,15 +340,217 @@ fn test_is_floor() {
 @
 
 
+To create a graph from the labyrinth is straight-forward:
+for every floor cell $x,y$, we add the pair $(x,y)$ to a
+hash table.  The value associated with that pair are the
+neighbor floor tiles; the neighbors are the four cells above,
+below, left, and right of $x,y$.
+
+<<data structures>>=
+type Vertex = (usize, usize);
+type Graph = HashMap<Vertex, Vec<Vertex>>;
+@
+
+<<labyrinth methods>>=
+fn to_graph(&self) -> Graph {
+    let mut g = HashMap::new();
+    for x in 0 .. self.max_x {
+        for y in 0 .. self.max_y {
+            if !self.is_floor(x, y) { continue; }
+            let mut neighbors = Vec::new();
+            if self.is_floor(x-1, y) { neighbors.push((x-1 ,y)); }
+            if self.is_floor(x+1, y) { neighbors.push((x+1, y)); }
+            if self.is_floor(x, y-1) { neighbors.push((x, y-1)); }
+            if self.is_floor(x, y+1) { neighbors.push((x, y+1)); }
+            g.insert((x, y), neighbors);
+        }
+    }
+    return g;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_to_graph() {
+    use super::Labyrinth;
+    let l = Labyrinth::new(2, 2, 10);
+    let g = l.to_graph();
+    assert!(g.contains_key(&(0, 0)));
+    assert!(!g.contains_key(&(1, 0)));
+    assert!(g.contains_key(&(0, 1)));
+    assert!(g.contains_key(&(1, 1)));
+    assert!({
+        let ns = g.get(&(0, 0)).unwrap();
+        ns.len() == 1 && ns.contains(&(0, 1))
+    });
+    assert!({
+        let ns = g.get(&(0, 1)).unwrap();
+        ns.len() == 2 && ns.contains(&(0, 0))
+        && ns.contains(&(1, 1))
+    });
+    assert!({
+        let ns = g.get(&(1, 1)).unwrap();
+        ns.len() == 1 && ns.contains(&(0, 1))
+    });
+}
+@
+
+\section{Dijkstra traversal}
+
+To find the shortest path from $(1,1)$ to $(31,39)$ we'll
+use Dijkstra's algorithm\footnote{\url{https://en.wikipedia.org/wiki/Dijkstra's_algorithm}}.
+Since for part A we are only asked for the shortest distance,
+we won't maintain a structure that allows finding the actual path.
+
+First, we need to initialize a couple data structures:
+\begin{description}
+\item[vertices] the set of all the vertices in the graph;
+\item[dist] the current minimum distance between $src$
+  and a given vertex; the distance between $src$ and itself
+  is initialized to zero, and all others should be initialized
+  to $\infty$.  Since [[usize]] does not have a concept of
+  infinity, and [[usize::max_value() + 1 < usize::max_value()]],
+  we'll use the arbitrary value 10,000 as our infinity.
+\end{description}
+
+<<initialize vertices and distances>>=
+let mut vertices: Vec<Vertex> = Vec::new();
+let mut dist: HashMap<Vertex, usize> = HashMap::new();
+for v in g.keys() {
+    vertices.push(*v);
+    dist.insert(*v, 10000);
+}
+dist.insert(src, 0);
+@
+
+Now comes the heart of the algorithm, filling out
+the [[dist]] map.
+
+<<update distances>>=
+while !vertices.is_empty() {
+    let u = remove_min(&mut vertices, &dist);
+    let u_neighbors = g.get(&u).unwrap();
+    for v in u_neighbors.iter() {
+        let curr_dist = *dist.get(&v).unwrap();
+        let alt_dist = *dist.get(&u).unwrap() + 1;
+        if alt_dist < curr_dist {
+            dist.insert(*v, alt_dist);
+        }
+    }
+}
+@
+
+We then put the initialization and distance update
+routine together; if the [[<<update distance>>]]
+never returned early, we return None.
+
+<<functions>>=
+fn compute_paths(g: &Graph, src: Vertex) -> HashMap<Vertex, usize> {
+    <<initialize vertices and distances>>
+    <<update distances>>
+    return dist;
+}
+
+fn shortest_path(g: &Graph, src: Vertex, dst: Vertex) -> Option<usize> {
+    let dist = compute_paths(&g, src);
+    match dist.get(&dst) {
+        Some(&10000) => None,
+        Some(d) => Some(*d),
+        _ => None
+    }
+}
+@
+
+The function [[remove_min]] is a helper to Dijkstra: it finds
+the vertex that has the shortest distance, removes it from
+the vector of vertices, and returns it.
+
+<<functions>>=
+fn remove_min(vertices: &mut Vec<Vertex>, dist: &HashMap<Vertex, usize>) -> Vertex {
+    let mut min = usize::max_value();
+    let mut candidate = 0;
+    for (i, v) in vertices.iter().enumerate() {
+        let candidate_dist = *dist.get(v).unwrap();
+        if candidate_dist < min {
+            min = candidate_dist;
+            candidate = i;
+        }
+    }
+    let nearest = vertices[candidate];
+    vertices.remove(candidate);
+    return nearest;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_shortest_path() {
+    use super::{Labyrinth, shortest_path};
+    let l = Labyrinth::new(2, 2, 10);
+    let g = l.to_graph();
+    assert_eq!(None, shortest_path(&g, (0, 0), (1, 0)));
+    assert_eq!(Some(2), shortest_path(&g, (0, 0), (1, 1)));
+
+    let l = Labyrinth::new(10, 7, 10);
+    let g = l.to_graph();
+    assert_eq!(Some(11), shortest_path(&g, (1, 1), (7, 4)));
+}
+@
+
+\section{Solving part A}
+
+Finally, we can solve part A! We initialize a labyrinth,
+and extend it until we find a path from $(1,1)$ to $(31,39)$
+and we hope it's the right answer!
+
+<<functions>>=
+fn solve_a() -> usize {
+    let mut x = 32;
+    let mut y = 40;
+
+    loop {
+        let l = Labyrinth::new(x, y, 1350);
+        let g = l.to_graph();
+        match shortest_path(&g, (1, 1), (31, 39)) {
+            Some(d) => {
+                return d;
+            }
+            None => {
+                x += 1;
+                y += 1;
+            }
+        }
+    }
+}
+@
+
+\section{Solving part B}
+
+How many cells are within 50 steps of $(1,1)$?
+
+<<functions>>=
+fn solve_b() -> usize {
+    let l = Labyrinth::new(100, 100, 1350);
+    let g = l.to_graph();
+    let dist = compute_paths(&g, (1, 1));
+    return dist
+        .values()
+        .filter(|d| **d <= 50)
+        .count();
+}
+@
+
 \section{Putting it all together}
 
 <<*>>=
+use std::collections::HashMap;
 <<data structures>>
 <<functions>>
 
 #[cfg(not(test))]
 fn main() {
-
+    println!("A: {}", solve_a());
+    println!("B: {}", solve_b());
 }
 @
 
