@@ -22,14 +22,20 @@ Here's the outline of my solution:
 \item search for a three-peat (3 consecutive identical hex digits);
 \item if there is a three-peat, search the md5 from index
   to index+1000 for a five-peat of the same digit;
-\item if that's true, that's a one-time pad.
+\item if that's true, that's a one-time pad;
+\item repeat 63 more times.
 \end{itemize}
 
 \section{Finding a three-peat}
 
-To find a three-peat, we'll scan three characters at a time;
+To find a three-peat, we scan three characters at a time;
 if there is a three-peat, return [[Some(d)]] where $d$ is the
 repeating hex digit, otherwise return [[None]].
+
+The Rust method [[.windows()]] is quite helpful here:
+it returns an iterator of slices of the requested length.
+The iterator stops when a window of the specified size
+cannot be returned.
 
 <<functions>>=
 fn three_peat(s: &str) -> Option<u8> {
@@ -58,9 +64,9 @@ fn test_three_peat() {
 
 \section{Finding a corresponding five-peat}
 
-The [[five_peat]] function is similar to [[three_peat]],
-but we're going to check if the five-peat is of the
-same character.
+The [[five_peat]] function is similar to [[three_peat]], but we're
+looking for a five-fold repetition of a specific character.  If we
+find such a repetition, we return true, otherwise we return false.
 
 <<functions>>=
 fn five_peat(s: &str, b: u8) -> bool {
@@ -73,6 +79,15 @@ fn five_peat(s: &str, b: u8) -> bool {
     return false;
 }
 @
+
+
+One might imagine abstracting [[five_peat]] and [[three_peat]]
+into a more general [[n_peat]] function, but I felt that
+such an exercise would be ill-advised: the functions, as they
+are currently written, are easy to understand, and are decently
+efficient, two things that I do not think a more general
+function could easily attain.
+
 
 <<unit tests>>=
 #[test]
@@ -95,7 +110,8 @@ fn test_five_peat() {
 A md5 string is a one-time pad if it contains
 a three-peat of a hex digit $d$ and $d$ is the
 character of a five-peat in the next 1000 md5 hashes.
-We're after the 64th one-time pad.
+We're looking for the index that produces
+the 64th one-time pad.
 
 To make the program more efficient, we'll keep
 a cache of the md5 hashes to avoid recomputing them.
@@ -125,16 +141,29 @@ fn solve(stretch: usize) -> usize {
     }
     return idx - 1;
 }
-@
+@ (We subtract one from [[idx]] because before exiting the loop
+we added one.)
+
+The heavy lifting of [[solve]] is done in [[get_md5]].
+The [[get_md5]] function returns an MD5 string directly from the
+cache if it's already been computed.  If the cache doesn't contain
+the MD5 string at the specified index, \emph{all} the MD5s hashes
+from the end of the cache up to and including the requested index are
+computed, after which the hash at the requested index is returned.
+
+\paragraph{Problem B} The second part of the problem demands
+that we apply md5 multiple times; the [[iters]] parameter
+controls this.  For problem A, we set it to 1, for problem
+B, we set it to 2017.
 
 <<functions>>=
-fn get_md5(cache: &mut Vec<String>, idx: usize, stretch: usize) -> String {
+fn get_md5(cache: &mut Vec<String>, idx: usize, iters: usize) -> String {
     if cache.len() >= idx {
         let mut md5er = Md5::new();
         for i in cache.len() .. idx+1 {
             //let mut s = format!("abc{}", i);
             let mut s = format!("ihaygndm{}", i);
-            for _ in 0 .. stretch {
+            for _ in 0 .. iters {
                 md5er.reset();
                 md5er.input_str(&s);
                 s = md5er.result_str().into();
