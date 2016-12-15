@@ -1,0 +1,183 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Another MD5 problem?  Okay, I guess we're using cargo again.
+The problem doesn't seem that hard, just a little bit ``meh''.
+Here's the outline of my solution:
+
+\begin{itemize}
+\item concatenate the salt and the current index together;
+\item get the md5;
+\item search for a three-peat (3 consecutive identical hex digits);
+\item if there is a three-peat, search the md5 from index
+  to index+1000 for a five-peat of the same digit;
+\item if that's true, that's a one-time pad.
+\end{itemize}
+
+\section{Finding a three-peat}
+
+To find a three-peat, we'll scan three characters at a time;
+if there is a three-peat, return [[Some(d)]] where $d$ is the
+repeating hex digit, otherwise return [[None]].
+
+<<functions>>=
+fn three_peat(s: &str) -> Option<u8> {
+    for win in s.as_bytes().windows(3) {
+        if win[0] == win[1] && win[1] == win[2] {
+            return Some(win[0]);
+        }
+    }
+    return None;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_three_peat() {
+    use super::three_peat;
+    assert_eq!(None, three_peat("abcdef"));
+    assert_eq!(None, three_peat("aabc"));
+    assert_eq!(None, three_peat("baac"));
+    assert_eq!(None, three_peat("bcaa"));
+    assert_eq!(Some(b'a'), three_peat("aaabc"));
+    assert_eq!(Some(b'a'), three_peat("baaac"));
+    assert_eq!(Some(b'a'), three_peat("bcaaa"));
+}
+@
+
+\section{Finding a corresponding five-peat}
+
+The [[five_peat]] function is similar to [[three_peat]],
+but we're going to check if the five-peat is of the
+same character.
+
+<<functions>>=
+fn five_peat(s: &str, b: u8) -> bool {
+    let needle = &[b, b, b, b, b];
+    for win in s.as_bytes().windows(5) {
+        if win == needle {
+            return true;
+        }
+    }
+    return false;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_five_peat() {
+    use super::five_peat;
+    assert_eq!(false, five_peat("aaaabc", b'a'));
+    assert_eq!(false, five_peat("baaaac", b'a'));
+    assert_eq!(false, five_peat("bcaaaa", b'a'));
+    assert_eq!(true, five_peat("aaaaabc", b'a'));
+    assert_eq!(true, five_peat("baaaaac", b'a'));
+    assert_eq!(true, five_peat("bcaaaaa", b'a'));
+    assert_eq!(false, five_peat("xxxxxbc", b'a'));
+    assert_eq!(false, five_peat("bxxxxxc", b'a'));
+    assert_eq!(false, five_peat("bcxxxxx", b'a'));
+}
+@
+
+\section{Finding the one-time pads}
+
+A md5 string is a one-time pad if it contains
+a three-peat of a hex digit $d$ and $d$ is the
+character of a five-peat in the next 1000 md5 hashes.
+We're after the 64th one-time pad.
+
+To make the program more efficient, we'll keep
+a cache of the md5 hashes to avoid recomputing them.
+
+
+<<functions>>=
+fn solve(stretch: usize) -> usize {
+    let mut cache: Vec<String> = Vec::new();
+    let mut idx = 0;
+    let mut left = 64;
+    while left != 0 {
+        let md5 = get_md5(&mut cache, idx, stretch);
+        match three_peat(&md5) {
+            Some(d) => {
+                for i in 0 .. 1000 {
+                    let next_md5 = get_md5(&mut cache, idx+i+1, stretch);
+                    if five_peat(&next_md5, d) {
+                        left -= 1;
+                        break;
+                    }
+                }
+            }
+            None => {
+            }
+        }
+        idx += 1;
+    }
+    return idx - 1;
+}
+@
+
+<<functions>>=
+fn get_md5(cache: &mut Vec<String>, idx: usize, stretch: usize) -> String {
+    if cache.len() >= idx {
+        let mut md5er = Md5::new();
+        for i in cache.len() .. idx+1 {
+            //let mut s = format!("abc{}", i);
+            let mut s = format!("ihaygndm{}", i);
+            for _ in 0 .. stretch {
+                md5er.reset();
+                md5er.input_str(&s);
+                s = md5er.result_str().into();
+            }
+            cache.push(s);
+        }
+        return cache[idx].clone();
+    } else {
+        return cache[idx].clone();
+    }
+}
+@
+
+
+\section{Putting it all together}
+
+
+<<*>>=
+extern crate crypto;
+use crypto::md5::Md5;
+use crypto::digest::Digest;
+<<functions>>
+#[cfg(not(test))]
+fn main() {
+    println!("A: {}", solve(1));
+    println!("B: {}", solve(2017));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<unit tests>>=
+@
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
