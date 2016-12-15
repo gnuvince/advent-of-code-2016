@@ -1,0 +1,146 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Today's problem is basically a simulation; at what
+time $t$ can we let a capsule drop vertically such that
+it goes through a set of discs moving circularly
+around a fixed point.
+
+\section{Solution A}
+
+The problem seems straight-forward, and so I don't think
+that a fancy-shmancy approach is required here.
+
+\begin{enumerate}
+\item We'll create a [[Disc]] data structure that holds
+  the total number of positions a disc can be in, and
+  its current position.  We'll add a [[tick]] method to
+  move the disc forward one position.
+\item Since the input of the program is rather small, and
+  that I don't feel like writing another ad-hoc string parser
+  today, we'll just inline the input into the program.
+\item We'll simulate the machine starting at $t=0$ until
+  we find an initial time that allows a capsule to drop
+  down through all discs.  The capsule falls through all
+  the discs if at time $t_i$ the current position of disc $i$
+  is 0.
+\end{enumerate}
+
+\section{Disc data structure}
+
+The implementation of the [[Disc]] data structure is quite simple,
+only two fields.  The [[tick]] method is also simple: add a number
+of ticks, and take the modulo of the number of positions.
+
+<<data structures>>=
+#[derive(Debug, Copy, Clone)]
+struct Disc {
+    positions: usize,
+    current: usize
+}
+
+impl Disc {
+    fn tick(&mut self, ticks: usize) {
+        self.current = (self.current + ticks) % self.positions;
+    }
+}
+@
+
+\section{Simulation}
+
+The [[simulate]] function accepts a slice of discs and
+returns the first value for [[t]] where a capsule could
+fall through.
+
+<<functions>>=
+fn simulate(discs: &mut Vec<Disc>) -> usize {
+    let mut t = 0;
+    loop {
+        let mut current_config = discs.clone();
+        <<wait for t seconds>>
+        let mut all_passed = true;
+        for i in 0 .. current_config.len() {
+            current_config[i].tick(i + 1);
+            all_passed = all_passed && current_config[i].current == 0;
+        }
+        if all_passed {
+            return t;
+        }
+        t += 1;
+    }
+}
+@
+
+<<wait for t seconds>>=
+for j in 0 .. current_config.len() {
+    current_config[j].tick(t);
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_simulate() {
+    use super::{Disc, simulate};
+    let mut discs = vec![
+        Disc{positions: 5, current: 4},
+        Disc{positions: 2, current: 1}
+    ];
+    assert_eq!(5, simulate(&mut discs));
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let mut discs_a = vec![
+        Disc{positions: 17, current: 15},
+        Disc{positions:  3, current:  2},
+        Disc{positions: 19, current:  4},
+        Disc{positions: 13, current:  2},
+        Disc{positions:  7, current:  2},
+        Disc{positions:  5, current:  0},
+    ];
+    println!("A: {}", simulate(&mut discs_a));
+    let mut discs_b = vec![
+        Disc{positions: 17, current: 15},
+        Disc{positions:  3, current:  2},
+        Disc{positions: 19, current:  4},
+        Disc{positions: 13, current:  2},
+        Disc{positions:  7, current:  2},
+        Disc{positions:  5, current:  0},
+        Disc{positions: 11, current:  0}
+    ];
+    println!("B: {}", simulate(&mut discs_b));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
