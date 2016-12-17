@@ -37,7 +37,8 @@ data structure for the display and the different methods
 to manipulate it.
 
 We'll represent the 2D display with a one-dimensional
-vector of [[u32]].  I've made this choice for a few reasons:
+vector of [[u32]].  I've made this choice over an array
+of booleans or an multi-dimensional vector for a few reasons:
 
 \begin{itemize}
 \item arrays have helpful methods defined on them only up
