@@ -1,0 +1,136 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Today's problem is neatly divided in two parts:
+(1) generating a bit string following the principles
+of the dragon curve until it exceeds a given length;
+(2) compute the checksum of the bitstring.
+
+I came up with all the pieces to solve the problem
+while I was waiting for diner at a local restaurant.
+If the time it took me to figure out the solution
+is any indication, it should not be a very difficult
+problem.
+
+\section{Bit string generation}
+
+Let's first implement a function to generate a bit
+string of the appropriate length.  We receive a seed
+(this will be our program's input) and apply the following
+transformation:
+
+\begin{enumerate}
+\item Take a copy $x$ of the string;
+\item Reverse $x$ and flip all the bits;
+\item Concatenate the seed, the bit 0, and $x$ together.
+\end{enumerate}
+
+We repeat this process until the seed has the length
+$n$ or more.  If the string is longer than $n$ bits,
+we chop off the tail as appropriate.
+
+<<functions>>=
+fn gen_bitstring(seed: &Vec<u8>, n: usize) -> Vec<u8> {
+    let mut s = seed.clone();
+    while s.len() < n {
+        let mut t = s.iter().map(|x| 1 - *x).collect::<Vec<u8>>();
+        t.reverse();
+        s.extend(vec![0]);
+        s.extend(&t);
+    }
+    return s[0..n].into();
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_gen() {
+    use super::gen_bitstring;
+    assert_eq!(vec![1, 0, 0], gen_bitstring(&vec![1], 3));
+    assert_eq!(vec![0, 0, 1], gen_bitstring(&vec![0], 3));
+    assert_eq!(vec![1,1,1,1,1,0,0,0,0,0,0],
+        gen_bitstring(&vec![1,1,1,1,1], 11));
+    assert_eq!(vec![1,1,1,1,0,0,0,0,1,0,1,0,0,1,0,1,0,1,1,1,1,0,0,0,0],
+        gen_bitstring(&vec![1,1,1,1,0,0,0,0,1,0,1,0], 25));
+}
+@
+
+\section{Checksum}
+
+To checksum a bit string, we write the xor of two consecutive
+(but not overlapping) bits into another bitstring.  If the
+checksum bitstring has an even length we repeat the process
+until we have a checksum that has an odd length.
+
+<<functions>>=
+fn checksum(mut s: Vec<u8>) -> Vec<u8> {
+    loop {
+        let mut check_str = vec![];
+        let mut i = 0;
+        while i < s.len() {
+            check_str.push(1 - (s[i] ^ s[i+1]));
+            i += 2;
+        }
+
+        if check_str.len() % 2 != 0 {
+            return check_str;
+        } else {
+            s = check_str;
+        }
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_checksum() {
+    use super::checksum;
+    assert_eq!(vec![1,0,0], checksum(vec![1,1,0,0,1,0,1,1,0,1,0,0]));
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let input = vec![1,0,0,0,1,0,0,1,1,0,0,0,0,0,0,0,1];
+    let sola = checksum(gen_bitstring(&input, 272));
+    print!("A: ");
+    for x in sola { print!("{}", x); }
+    println!("");
+
+    let solb = checksum(gen_bitstring(&input, 35651584));
+    print!("B: ");
+    for x in solb { print!("{}", x); }
+    println!("");
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
