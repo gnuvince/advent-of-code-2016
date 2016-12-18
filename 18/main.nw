@@ -1,0 +1,220 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Today's problem is about detecting traps.
+In a room with safe and trapped tiles,
+we use the information from row $r$ to
+classify the tiles of row $r+1$ as safe
+or trapped.
+
+\section{Solution A}
+
+\paragraph{Safe or trapped?}
+A tile with parents called left, center, and right
+is trapped according to the following table.
+
+\begin{center}
+\begin{tabular}{l l l | l }
+    Left & Center & Right & Is Trapped? \\
+    \hline
+    Safe & Safe & Safe & Safe \\
+    Safe & Safe & Trap & Trap \\
+    Safe & Trap & Safe & Safe \\
+    Safe & Trap & Trap & Trap \\
+    Trap & Safe & Safe & Trap \\
+    Trap & Safe & Trap & Safe \\
+    Trap & Trap & Safe & Trap \\
+    Trap & Trap & Trap & Safe
+\end{tabular}
+\end{center}
+
+If we let trap be true, and safe be false,
+we can convert the table above into the
+expression below.
+
+\[
+(L \wedge C \wedge \neg R) \vee
+(\neg L \wedge C \wedge R) \vee
+(L \wedge \neg C \wedge \neg R) \vee
+(\neg L \wedge \neg C \wedge R)
+\]
+
+Let's convert this expression into Rust.
+
+<<functions>>=
+fn is_trap(l: bool, c: bool, r: bool) -> bool {
+    (l && c && !r) || (!l && c && r) ||
+    (l && !c && !r) || (!l && !c && r)
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_is_trap() {
+    use super::is_trap;
+    assert_eq!(false, is_trap(false, false, false));
+    assert_eq!(true , is_trap(false, false, true));
+    assert_eq!(false, is_trap(false, true , false));
+    assert_eq!(true , is_trap(false, true , true));
+    assert_eq!(true , is_trap(true , false, false));
+    assert_eq!(false, is_trap(true , false, true));
+    assert_eq!(true , is_trap(true , true , false));
+    assert_eq!(false, is_trap(true , true , true));
+}
+@
+
+\paragraph{Fetching the parents}
+The left parent of the left-most tile
+and the right parent of the right-most tile
+are always considered to be safe.  Let's
+write a function to fetch the parents of
+a given tile.
+
+<<functions>>=
+fn parents(prev_row: &[bool], tile: usize) -> (bool, bool, bool) {
+    let left = *prev_row.get(tile - 1).unwrap_or(&false);
+    let center = prev_row[tile];
+    let right = *prev_row.get(tile + 1).unwrap_or(&false);
+    return (left, center, right);
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parents() {
+    use super::parents;
+    assert_eq!((false, true, true), parents(&[true, true, true], 0));
+    assert_eq!((true, true, true), parents(&[true, true, true], 1));
+    assert_eq!((true, true, false), parents(&[true, true, true], 2));
+}
+@
+
+\paragraph{Generating new row}
+Given an initial row, let's build a new row
+by using the [[is_trap]] and [[parents]] functions.
+
+<<functions>>=
+fn new_row(prev_row: &[bool]) -> Vec<bool> {
+    let mut row = Vec::with_capacity(prev_row.len());
+    for i in 0 .. prev_row.len() {
+        let (l, c, r) = parents(&prev_row, i);
+        row.push(is_trap(l, c, r));
+    }
+    return row;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_new_row() {
+    use super::new_row;
+    assert_eq!(vec![false, true, true, true, true],
+        new_row(&[false, false, true, true, false]));
+    assert_eq!(vec![true, true, false, false, true],
+        new_row(&[false, true, true, true, true]));
+}
+@
+
+\paragraph{Parsing}
+The input is given as a string of periods (safe)
+and carets (trap).  Let's write a quick parser.
+
+<<functions>>=
+fn parse(s: &str) -> Vec<bool> {
+    let mut out = Vec::new();
+    for c in s.chars() {
+        if c == '.' { out.push(false); }
+        if c == '^' { out.push(true); }
+    }
+    return out;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parse() {
+    use super::parse;
+    assert_eq!(vec![true, false, true], parse("^.^"));
+}
+@
+
+\paragraph{Solving part A}
+For part A, we have to tell how many tiles are safe
+over 40 rows.  Let's write a function to count the
+false in a row.
+
+<<functions>>=
+fn count_false(row: &[bool]) -> usize {
+    row.iter().map(|x| if *x { 0 } else { 1 }).sum()
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_count_false() {
+    use super::{parse, count_false};
+    assert_eq!(2, count_false(&parse(".^.")));
+}
+@
+
+<<functions>>=
+fn solve(s: &str, rows: usize) -> usize {
+    let mut safe_tiles = 0;
+    let mut row = parse(s);
+    for _ in 0 .. rows {
+        safe_tiles += count_false(&row);
+        row = new_row(&row);
+    }
+    return safe_tiles;
+}
+@
+
+\paragraph{Solving part B}
+For part B, instead of finding the number
+of safe tiles over 40 rows, we need to find
+the number of safe tiles over 400,000 rows.
+I modified the [[solve]] function to accept
+and row parameter and bingo!
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    stdin.read_line(&mut buf);
+    println!("A: {}", solve(&buf, 40));
+    println!("B: {}", solve(&buf, 400000));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
