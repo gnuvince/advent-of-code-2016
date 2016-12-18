@@ -294,6 +294,16 @@ fn transition(s: usize, src: usize, dst: usize,
 
 \section{Generating transitions}
 
+We can generate all the transitions, i.e., the
+valid subsequent states, as follows:
+
+\begin{itemize}
+\item Obtain the position of the elevator and extract that floor;
+\item Add all transitions of a single and pair of components (if valid);
+\item As an optimization to the previous point, don't consider
+  going down on the 0th floor or up on the 3rd floor.
+\end{itemize}
+
 <<functions>>=
 fn gen_transitions(s: usize) -> Vec<usize> {
     let src = elevator(s);
@@ -330,6 +340,30 @@ fn gen_transitions(s: usize) -> Vec<usize> {
 
 All the building blocks are in place, we can
 now perform our search.
+
+\textbf{Update:} initially the program would be terminated
+by Linux's OOM killer because it took too much memory.
+I realized that although my solution was correct, there
+were a couple of things I could do to improve upon it.
+
+\begin{enumerate}
+\item I check for equality
+  with the destination state after popping.
+  I modified the function to do the check
+  as succeeding states are being added.
+  If the destination is added to the queue,
+  it could take thousands, even millions
+  of iterations before we eventually pop it off.
+\item States are marked as seen after
+  being queued rather than after being
+  unqueued.  This prevents the queue
+  from having duplicates that can make
+  the length of the queue explode.  In
+  the previous version, the queue could
+  reach hundreds of millions of states,
+  whereas now the maximum number is
+  around 300,000 states, much more manageable.
+\end{enumerate}
 
 <<imports>>=
 use std::collections::{VecDeque, HashSet};
@@ -374,7 +408,6 @@ breaking solution A.
 <<*>>=
 <<imports>>
 <<constants>>
-<<data structures>>
 <<functions>>
 
 #[cfg(not(test))]
