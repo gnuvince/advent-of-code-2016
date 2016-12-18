@@ -23,10 +23,17 @@ Day 11, so I'm pretty tired.  I won't attempt
 a complex solution: BFS, you are my tool of
 choice again!
 
+The BFS queue will hold $\langle$path, position$\rangle$ pairs.
+The path component is the string of directions that were taken
+(e.g., ``RRUDL'') to reach the position $\langle x,y \rangle$.
+
+We'll keep doing the breadth-first traversal until position is
+$\langle 3,3 \rangle$, at which point we return the path and
+terminate.
+
 \section{Vectors}
 
-Let's define a data structure that we shall
-use for positions and directions, a 2D vector.
+Let's define a vector data structure to for positions.
 
 <<data structures>>=
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -38,8 +45,11 @@ impl Vec2 {
 @
 
 \paragraph{Addition}
-One of the most important operations our vectors
-need to support is addition.
+We will want to represent a move in a cardinal
+direction as a vector as well (e.g., the down
+direction `D' is mapped to the vector
+$\langle 0,1 \rangle$).  To apply a direction
+to a position, we will use vector addition.
 
 <<vec methods>>=
 fn add(&self, other: Vec2) -> Vec2 {
@@ -62,8 +72,16 @@ fn test_vec2_add() {
 
 We compute the legal directions (i.e., the unlock pages)
 by taking the MD5 of the initial password concatenated
-with the directions.
-We'll return the possible directions as a vector of chars.
+with the string of directions.
+
+Looking the first 4 characters of the MD5 strings tells
+us, respectively, if the up, down, left, and right doors
+are locked or unlocked.  A door is unlocked if the MD5
+character in its position is between `b' and `f'.
+
+Note that sometimes, a ``door'' will be marked as opened
+when in fact it's a wall.  We punt this check to a
+later function.
 
 <<functions>>=
 fn available_directions(password: &str) -> Vec<char> {
@@ -100,20 +118,24 @@ fn dir_to_vec(c: char) -> Vec2 {
 
 \section{Validating positions}
 
-We want to stay in the grid, so any move
+We want to stay in the room, so any move
 that brings us out of bounds should be
-considered illegal.
+considered illegal, i.e., going through
+a wall.
 
 <<functions>>=
-fn is_legal(v: Vec2) -> bool {
-    v.0 >= 0 && v.0 < 4 && v.1 >= 0 && v.1 < 4
+fn is_legal(pos: Vec2) -> bool {
+    pos.0 >= 0 && pos.0 < 4
+    && pos.1 >= 0 && pos.1 < 4
 }
 @
 
 \section{BFS}
 
-For part A, we find the solution by running
-a BFS search.  Too tired to give good explanations.
+For part A, we can find the solution by running
+a BFS search.  Since retracing our steps is allowed
+and changes the state of the problem,
+we do not maintain a set of already explored positions.
 
 <<functions>>=
 fn search(password: &str) -> String {
@@ -121,14 +143,14 @@ fn search(password: &str) -> String {
     queue.push_front((String::new(), Vec2(0, 0)));
 
     while !queue.is_empty() {
-        let (path, cell) = queue.pop_back().unwrap();
-        if cell == Vec2(3, 3) {
+        let (path, pos) = queue.pop_back().unwrap();
+        if pos == Vec2(3, 3) {
             return path;
         }
         let new_password = format!("{}{}", password, path);
         for c in available_directions(&new_password) {
             let d = dir_to_vec(c);
-            let next = cell.add(d);
+            let next = pos.add(d);
             if is_legal(next) {
                 let new_path: String = format!("{}{}", path, c).into();
                 queue.push_front((new_path, next));
@@ -142,6 +164,22 @@ fn search(password: &str) -> String {
 
 \section{Solution B}
 
+Problem B requires us to find the \emph{longest}
+path from the start of the room to the exit.
+The traversal ends as soon as we reach
+$\langle 3,3 \rangle$.
+
+We can use the BFS approach from part A, and apply
+a couple of changes.
+
+First, we no longer terminate the search
+when we find the exit; rather we compare the
+length of the path with the current maximum
+and update it if the new path is longer.
+
+Second, instead of returning the path itself,
+we return its length.
+
 <<functions>>=
 fn search_b(password: &str) -> usize {
     let mut queue = VecDeque::new();
@@ -149,18 +187,17 @@ fn search_b(password: &str) -> usize {
     queue.push_front((String::new(), Vec2(0, 0)));
 
     while !queue.is_empty() {
-        let (path, cell) = queue.pop_back().unwrap();
-        if cell == Vec2(3, 3) {
+        let (path, pos) = queue.pop_back().unwrap();
+        if pos == Vec2(3, 3) {
             if path.len() > max {
                 max = path.len();
-                //println!("{}", max);
             }
             continue;
         }
         let new_password = format!("{}{}", password, path);
         for c in available_directions(&new_password) {
             let d = dir_to_vec(c);
-            let next = cell.add(d);
+            let next = pos.add(d);
             if is_legal(next) {
                 let new_path: String = format!("{}{}", path, c).into();
                 queue.push_front((new_path, next));
@@ -175,6 +212,9 @@ fn search_b(password: &str) -> usize {
 
 \section{Putting it all together}
 
+We can find the answers to both parts
+by calling [[search]] and [[search_b]]
+with the appropriate password.
 
 <<*>>=
 extern crate crypto;
