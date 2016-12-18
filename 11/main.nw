@@ -319,15 +319,18 @@ fn search(src: State, dst: State) -> usize {
 
     while !queue.is_empty() {
         let (steps, curr_state) = queue.pop_back().expect("empty queue");
-        seen.insert(curr_state.clone());
 
         if curr_state == dst { return steps; }
         if !curr_state.is_valid() { continue; }
 
         for step in curr_state.all_steps() {
             let succ_state = curr_state.transition(&step);
+            if succ_state == dst { return steps + 1; }
+            if !succ_state.is_valid() { continue; }
+
             if !seen.contains(&succ_state) {
-                queue.push_front((steps+1, succ_state));
+                queue.push_front((steps+1, succ_state.clone()));
+                seen.insert(succ_state.clone());
             }
         }
     }
@@ -350,7 +353,7 @@ fn main() {
     let t = true;
     let f = false;
 
-    let src = State {
+    let src_a = State {
         elevator: 0,
         floors: vec![
             vec![t,t,f,f,f,f,f,f,f,f],
@@ -360,7 +363,7 @@ fn main() {
         ]
     };
 
-    let dst = State {
+    let dst_a = State {
         elevator: 3,
         floors: vec![
             vec![f,f,f,f,f,f,f,f,f,f],
@@ -369,32 +372,29 @@ fn main() {
             vec![t,t,t,t,t,t,t,t,t,t],
         ]
     };
-    println!("A: {}", search(src, dst));
+    println!("A: {}", search(src_a, dst_a));
 
-    /*
-    let src = State {
+    let src_b = State {
         elevator: 0,
         floors: vec![
-            //   HM     HG     LM     LG
-            vec![true , false, true , false],
-            vec![false, true , false, false],
-            vec![false, false, false, true],
-            vec![false, false, false, false],
+            vec![t,t,t,t,t,t,f,f,f,f,f,f,f,f],
+            vec![f,f,f,f,f,f,f,t,f,t,f,t,f,t],
+            vec![f,f,f,f,f,f,t,f,t,f,t,f,t,f],
+            vec![f,f,f,f,f,f,f,f,f,f,f,f,f,f],
         ]
     };
 
-    let dst = State {
+    let dst_b = State {
         elevator: 3,
         floors: vec![
-            vec![false, false, false, false],
-            vec![false, false, false, false],
-            vec![false, false, false, false],
-            vec![true , true , true , true],
+            vec![f,f,f,f,f,f,f,f,f,f,f,f,f,f],
+            vec![f,f,f,f,f,f,f,f,f,f,f,f,f,f],
+            vec![f,f,f,f,f,f,f,f,f,f,f,f,f,f],
+            vec![t,t,t,t,t,t,t,t,t,t,t,t,t,t],
         ]
     };
+    println!("B: {}", search(src_b, dst_b));
 
-    println!("A: {}", search(src, dst));
-    */
 }
 @
 
