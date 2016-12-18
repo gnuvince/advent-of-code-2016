@@ -1,0 +1,229 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+MD5 again?  Awright...  And finding a path again?
+After my multiple failures at solving Day 11,
+I hope I don't exhaust all my memory again.
+
+\section{Solution A}
+
+I've spend the past 10 hours trying to solve
+Day 11, so I'm pretty tired.  I won't attempt
+a complex solution: BFS, you are my tool of
+choice again!
+
+\section{Vectors}
+
+Let's define a data structure that we shall
+use for positions and directions, a 2D vector.
+
+<<data structures>>=
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct Vec2(isize, isize);
+
+impl Vec2 {
+    <<vec methods>>
+}
+@
+
+\paragraph{Addition}
+One of the most important operations our vectors
+need to support is addition.
+
+<<vec methods>>=
+fn add(&self, other: Vec2) -> Vec2 {
+    Vec2(self.0 + other.0, self.1 + other.1)
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_vec2_add() {
+    use super::Vec2;
+    let v1 = Vec2(3, 4);
+    let v2 = Vec2(0, -1);
+    assert_eq!(Vec2(3, 3), v1.add(v2));
+}
+@
+
+
+\section{Computing the available directions}
+
+We compute the legal directions (i.e., the unlock pages)
+by taking the MD5 of the initial password concatenated
+with the directions.
+We'll return the possible directions as a vector of chars.
+
+<<functions>>=
+fn available_directions(password: &str) -> Vec<char> {
+    let mut md5er = Md5::new();
+    md5er.input_str(password);
+    let s = md5er.result_str();
+    let b = s.as_bytes();
+
+    let mut out = Vec::new();
+    if b[0] >= b'b' { out.push('U'); }
+    if b[1] >= b'b' { out.push('D'); }
+    if b[2] >= b'b' { out.push('L'); }
+    if b[3] >= b'b' { out.push('R'); }
+    return out;
+}
+@
+
+\section{Converting a direction to a vector}
+
+We want to convert the U, D, L, and R characters
+to the appropriate unit vectors.
+
+<<functions>>=
+fn dir_to_vec(c: char) -> Vec2 {
+    match c {
+        'U' => Vec2(0, -1),
+        'D' => Vec2(0, 1),
+        'L' => Vec2(-1, 0),
+        'R' => Vec2(1, 0),
+        _ => panic!("unknown direction: {}", c)
+    }
+}
+@
+
+\section{Validating positions}
+
+We want to stay in the grid, so any move
+that brings us out of bounds should be
+considered illegal.
+
+<<functions>>=
+fn is_legal(v: Vec2) -> bool {
+    v.0 >= 0 && v.0 < 4 && v.1 >= 0 && v.1 < 4
+}
+@
+
+\section{BFS}
+
+For part A, we find the solution by running
+a BFS search.  Too tired to give good explanations.
+
+<<functions>>=
+fn search(password: &str) -> String {
+    let mut queue = VecDeque::new();
+    queue.push_front((String::new(), Vec2(0, 0)));
+
+    while !queue.is_empty() {
+        let (path, cell) = queue.pop_back().unwrap();
+        if cell == Vec2(3, 3) {
+            return path;
+        }
+        let new_password = format!("{}{}", password, path);
+        for c in available_directions(&new_password) {
+            let d = dir_to_vec(c);
+            let next = cell.add(d);
+            if is_legal(next) {
+                let new_path: String = format!("{}{}", path, c).into();
+                queue.push_front((new_path, next));
+            }
+        }
+    }
+    return "not found".into();
+}
+@
+
+
+\section{Solution B}
+
+<<functions>>=
+fn search_b(password: &str) -> usize {
+    let mut queue = VecDeque::new();
+    let mut max = 0;
+    queue.push_front((String::new(), Vec2(0, 0)));
+
+    while !queue.is_empty() {
+        let (path, cell) = queue.pop_back().unwrap();
+        if cell == Vec2(3, 3) {
+            if path.len() > max {
+                max = path.len();
+                //println!("{}", max);
+            }
+            continue;
+        }
+        let new_password = format!("{}{}", password, path);
+        for c in available_directions(&new_password) {
+            let d = dir_to_vec(c);
+            let next = cell.add(d);
+            if is_legal(next) {
+                let new_path: String = format!("{}{}", path, c).into();
+                queue.push_front((new_path, next));
+            }
+        }
+    }
+    return max;
+}
+@
+
+
+
+\section{Putting it all together}
+
+
+<<*>>=
+extern crate crypto;
+use crypto::md5::Md5;
+use crypto::digest::Digest;
+use std::collections::VecDeque;
+<<data structures>>
+<<functions>>
+#[cfg(not(test))]
+fn main() {
+    println!("A: {}", search("pgflpeqp"));
+    println!("B: {}", search_b("pgflpeqp"));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<unit tests>>=
+@
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_search() {
+    use super::search;
+    assert_eq!("DDRRRD", search("ihgpwlah"));
+    assert_eq!("DDUDRLRRUDRD", search("kglvqrro"));
+    assert_eq!("DRURDRUDDLLDLUURRDULRLDUUDDDRR", search("ulqzkmiv"));
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_search_b() {
+    use super::search_b;
+    assert_eq!(830, search_b("ulqzkmiv"));
+    assert_eq!(492, search_b("kglvqrro"));
+    assert_eq!(370, search_b("ihgpwlah"));
+}
+@
+
+\end{appendices}
+
+\end{document}

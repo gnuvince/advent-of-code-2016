@@ -1,0 +1,548 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Ah, the infamous Day 11 problem!  It was the first
+problem that I abandoned after a couple of hours
+because I could just not figure out a proper solution.
+Apparently I was not the only one!  For many days,
+none of my colleagues had solutions either, and
+the global statistics of Advent of Code show that
+Day 11 is the first occurrence where it has fewer
+solves than the day after it.
+
+The problem is similar to the classic problem
+where one needs to bring a wolf, a sheep, and
+a lettuce from one shore to another.  Instead
+of wolves and sheeps, we have radio-active
+generators and micro-chips, and instead of
+a raft and river with have an elevator and
+four floors.
+
+\section{Solution A}
+
+I imagine that people who are good at operations research
+have figured out an elegant and fast way to solve the
+problem, I'm just going to use brute force.
+The idea is basically to perform a breadth-first search
+through the problem space until we reach the desired state.
+
+\section{State of the building}
+
+There are two components that determine the state of the building:
+
+\begin{itemize}
+\item the floor where the elevator is;
+\item what generators/micro-chips are on each floor.
+\end{itemize}
+
+The elevator position is trivially represented by a [[usize]].
+For the content of a floor, we can use a vector of bits,
+and each component (generator or transformer) is always
+at the same offset.  We'll put the micro-chips at the even
+offsets, and the generators at the odd offsets;
+compatible micro-chip and generators are at consecutive
+offsets, i.e. if $i$ is a micro-chip, then $i+1$ is its
+compatible generator.
+
+We make our [[State]] structure hashable because we will
+want to store them in a set later on.
+
+<<data structures>>=
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+struct State {
+    elevator: usize,
+    floors: Vec<Vec<bool>>
+}
+
+impl State {
+    <<state methods>>
+}
+@
+
+\subsection{State validity}
+
+Not all states are valid. Two criteria determine
+if a state is valid: (1) the elevator needs
+to be between 0 and 3 (inclusive); (2) no
+micro-chip should be left unprotected with an
+incompatible generator.
+
+Let's write a method that checks those criteria
+and returns [[true]] if the state is valid, and
+[[false]] otherwise.
+
+<<state methods>>=
+fn is_valid(&self) -> bool {
+    <<verify elevator position>>
+    <<verify safety of micro-chips>>
+    return true;
+}
+@
+
+Ensuring that the elevator is in a valid position
+is as straight-forward as you imagine it is.
+
+<<verify elevator position>>=
+if self.elevator > 3 {
+    return false;
+}
+@
+
+Verifying the safety of the micro-chips is a bit
+more complicated.  First, a chip at position $i$
+is definitely safe if its associated generator
+(at position $i+1$) is on the same floor.
+If the chip is not safe, then we have to
+ensure that there are no generators on the floor.
+
+To implement this check, we'll first need a new
+method on [[State]] to check if a floor contains
+any generator.
+
+<<state methods>>=
+fn floor_has_generator(&self, floor: usize) -> bool {
+    let mut i = 1;
+    while i < self.floors[floor].len() {
+        if self.floors[floor][i] {
+            return true;
+        }
+        i += 2;
+    }
+    return false;
+}
+@
+
+To verify that the micro-chips are safe on all
+floors, we inspect the micro-chip positions of
+all floors one after the other.
+We skip over any micro-chip position that doesn't
+contain a micro-chip (i.e., vector value is [[false]]).
+When a micro-chip is present, if it is not shieled
+and there are generators present on the same floor,
+we report the state as invalid.
+
+<<verify safety of micro-chips>>=
+for floor in 0 .. self.floors.len() {
+    let has_generator = self.floor_has_generator(floor);
+    let mut i = 0;
+    while i < self.floors[floor].len() {
+        if self.floors[floor][i] {
+            let is_shieled = self.floors[floor][i+1];
+            if !is_shieled && has_generator {
+                return false;
+            }
+        }
+        i += 2;
+    }
+}
+@
+
+The unit tests for verifying the validity
+of a state can be found in \autoref{app:validity-tests}.
+
+
+\section{Moving parts around}
+
+With our [[State]] structure in place,
+we need to have a way to move the pieces
+from one floor to the next.  Let's define
+a data structure that represents a
+displacement step: we'll need to know if we're
+going up or down, and we'll want to know
+the offsets of the components that we're
+bringing with us.
+
+<<data structures>>=
+#[derive(PartialEq)]
+enum Direction { Up, Down }
+
+struct Step {
+    dir: Direction,
+    components: Vec<usize>
+}
+@
+
+Returning to our [[State]] structure,
+we can add a new method, [[transition]],
+that accepts a [[Step]] and returns a new
+state with the appropriate changes.
+
+\paragraph{Elevator}
+The elevator is increased or decreased according to
+the direction of the step.
+
+<<transition elevator>>=
+if step.dir == Direction::Up {
+    self.elevator + 1
+} else {
+    self.elevator - 1
+}
+@
+
+\paragraph{Floors}
+The values at the offsets indicated by the vector of components
+are flipped for the current and the new floor.
+
+<<transition floors>>=
+if floor == elevator || floor == self.elevator {
+    for i in step.components.iter() {
+        floors[floor][*i] = !floors[floor][*i];
+    }
+}
+@
+
+<<state methods>>=
+fn transition(&self, step: &Step) -> State {
+    let elevator = <<transition elevator>>;
+
+    let mut floors = Vec::with_capacity(4);
+    for floor in 0 .. self.floors.len() {
+        floors.push(self.floors[floor].clone());
+        <<transition floors>>
+    }
+    return State { elevator: elevator, floors: floors };
+}
+@
+
+The unit tests for transitioning between states can be
+found in \autoref{app:transition-tests}.
+
+
+\section{Enumerating the possible steps}
+
+At this point, we have a structure, [[State]],
+that captures where the elements of the
+problems are located and that can tell us if
+such a configuration is valid, and we have
+a structure, [[Step]], that can take a state
+into a new configuration.  The next logical
+step is to list \emph{all} the steps that
+can be applied to a state.
+
+The problem states that we need to bring
+at least one component with us, but that
+no more than two fit in the elevator.
+To list all the possible steps, we create
+a vector containing [[Step]] objects
+with both directions, and all the
+combination of 1 or 2 components available
+on the floor.
+
+<<state methods>>=
+fn all_steps(&self) -> Vec<Step> {
+    let mut steps = Vec::new();
+    let n = self.floors[self.elevator].len();
+    for i in 0 .. n {
+        if !self.floors[self.elevator][i] {
+            continue;
+        }
+        if i != n-1 {
+            steps.push(Step { dir: Direction::Up, components: vec![i] });
+        }
+
+        if i != 0 {
+            steps.push(Step { dir: Direction::Down, components: vec![i] });
+        }
+        for j in i+1 .. n {
+            if !self.floors[self.elevator][j] {
+                continue;
+            }
+            if incompatible(i, j) {
+                continue;
+            }
+            if i != n-1 {
+                steps.push(Step { dir: Direction::Up, components: vec![i, j] });
+            }
+            if i != 0 {
+                steps.push(Step { dir: Direction::Down, components: vec![i, j] });
+            }
+        }
+    }
+    return steps;
+}
+@
+
+Not all the steps will yield a valid state,
+and some could readily be eliminated, but for
+simplicity we won't attempt (yet) to prune
+the steps; only [[is_valid]] shall be responsible
+for rejecting invalid states.
+
+\textbf{Update:} running the program without
+any pruning ate all the memory and Linux's OOM
+killer terminated the process.  Let's implement
+some basic pruning.
+
+\begin{itemize}
+\item If we are on the bottom or top floor,
+  do not try to go down or up respectively.
+\item Do not try to take a micro-chip and
+  an incompatible generator in the elevator.
+\end{itemize}
+
+<<functions>>=
+fn incompatible(i: usize, j: usize) -> bool {
+    (i % 2 == 0 && j % 2 == 1 && j != i+1)
+    || (j % 2 == 0 && i % 2 == 1 && i != j+1)
+}
+@
+
+\textbf{Update 2:} even with basic pruning,
+the program consumes too much memory to finish...
+
+\section{Search}
+
+All the building blocks are in place, we can
+now perform our search.
+
+<<imports>>=
+use std::collections::{VecDeque, HashSet};
+@
+
+<<functions>>=
+fn search(src: State, dst: State) -> usize {
+    let mut queue = VecDeque::new();
+    let mut seen = HashSet::new();
+
+    queue.push_front((0, src));
+
+    while !queue.is_empty() {
+        let (steps, curr_state) = queue.pop_back().expect("empty queue");
+        seen.insert(curr_state.clone());
+
+        if curr_state == dst { return steps; }
+        if !curr_state.is_valid() { continue; }
+
+        for step in curr_state.all_steps() {
+            let succ_state = curr_state.transition(&step);
+            if !seen.contains(&succ_state) {
+                queue.push_front((steps+1, succ_state));
+            }
+        }
+    }
+
+    return 0xffff;
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+<<imports>>
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let t = true;
+    let f = false;
+
+    let src = State {
+        elevator: 0,
+        floors: vec![
+            vec![t,t,f,f,f,f,f,f,f,f],
+            vec![f,f,f,t,f,t,f,t,f,t],
+            vec![f,f,t,f,t,f,t,f,t,f],
+            vec![f,f,f,f,f,f,f,f,f,f],
+        ]
+    };
+
+    let dst = State {
+        elevator: 3,
+        floors: vec![
+            vec![f,f,f,f,f,f,f,f,f,f],
+            vec![f,f,f,f,f,f,f,f,f,f],
+            vec![f,f,f,f,f,f,f,f,f,f],
+            vec![t,t,t,t,t,t,t,t,t,t],
+        ]
+    };
+    println!("A: {}", search(src, dst));
+
+    /*
+    let src = State {
+        elevator: 0,
+        floors: vec![
+            //   HM     HG     LM     LG
+            vec![true , false, true , false],
+            vec![false, true , false, false],
+            vec![false, false, false, true],
+            vec![false, false, false, false],
+        ]
+    };
+
+    let dst = State {
+        elevator: 3,
+        floors: vec![
+            vec![false, false, false, false],
+            vec![false, false, false, false],
+            vec![false, false, false, false],
+            vec![true , true , true , true],
+        ]
+    };
+
+    println!("A: {}", search(src, dst));
+    */
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\subsection{State validity unit tests}
+\label{app:validity-tests}
+
+<<unit tests>>=
+#[test]
+fn test_state_is_valid() {
+    use super::State;
+    let s = State { elevator: 4, floors: vec![] };
+    assert_eq!(false, s.is_valid());
+    let s = State { elevator: !0, floors: vec![] };
+    assert_eq!(false, s.is_valid());
+
+    let s = State {
+        elevator: 0,
+        floors: vec![
+            vec!(true, true, false, false),
+            vec!(false, false, true, true),
+        ]
+    };
+    assert_eq!(true, s.is_valid());
+
+    let s = State {
+        elevator: 0,
+        floors: vec![
+            vec!(true, true, false, true),
+            vec!(false, false, true, false),
+        ]
+    };
+    assert_eq!(true, s.is_valid());
+
+    let s = State {
+        elevator: 0,
+        floors: vec![
+            vec!(true, false, true, false),
+            vec!(false, true, false, true),
+        ]
+    };
+    assert_eq!(true, s.is_valid());
+
+    let s = State {
+        elevator: 0,
+        floors: vec![
+            vec!(false, true, false, false),
+            vec!(true, false, true, true),
+        ]
+    };
+    assert_eq!(false, s.is_valid());
+}
+@
+
+\subsection{State transition unit tests}
+\label{app:transition-tests}
+
+<<unit tests>>=
+#[test]
+fn test_transition() {
+    use super::{State, Step, Direction};
+    let s1 = State {
+        elevator: 0,
+        floors: vec![
+            vec![false, false, true, true],
+            vec![true, true, false, false]
+        ]
+    };
+
+    let s2 = State {
+        elevator: 1,
+        floors: vec![
+            vec![false, false, false, false],
+            vec![true, true, true, true]
+        ]
+    };
+
+    let step1 = Step { dir: Direction::Up, components: vec![2, 3] };
+    let step2 = Step { dir: Direction::Down, components: vec![2, 3] };
+    assert_eq!(s2, s1.transition(&step1));
+    assert_eq!(s1, s2.transition(&step2));
+}
+@
+
+\subsection{Search tests}
+
+<<unit tests>>=
+#[test]
+fn test_search() {
+    use super::{search, State};
+    let src = State {
+        elevator: 0,
+        floors: vec![
+            //   HM     HG     LM     LG
+            vec![true , false, true , false],
+            vec![false, true , false, false],
+            vec![false, false, false, true],
+            vec![false, false, false, false],
+        ]
+    };
+    let step1 = State {
+        elevator: 1,
+        floors: vec![
+            //   HM     HG     LM     LG
+            vec![false, false, true , false],
+            vec![true , true , false, false],
+            vec![false, false, false, true],
+            vec![false, false, false, false],
+        ]
+    };
+
+    let step2 = State {
+        elevator: 2,
+        floors: vec![
+            //   HM     HG     LM     LG
+            vec![false, false, true , false],
+            vec![false, false, false, false],
+            vec![true , true , false, true],
+            vec![false, false, false, false],
+        ]
+    };
+
+    let dst = State {
+        elevator: 3,
+        floors: vec![
+            vec![false, false, false, false],
+            vec![false, false, false, false],
+            vec![false, false, false, false],
+            vec![true , true , true , true],
+        ]
+    };
+    assert_eq!(0 , search(src.clone(), src.clone()));
+    assert_eq!(1 , search(src.clone(), step1));
+    assert_eq!(2 , search(src.clone(), step2));
+    assert_eq!(11, search(src, dst));
+}
+@
+
+\end{appendices}
+
+\end{document}

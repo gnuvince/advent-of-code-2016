@@ -1,0 +1,444 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\begin{document}
+
+\section{Problem A}
+
+Wow, what a problem!  This is my second attempt
+at solving the infamous Day 11 problem; I have
+another solution (see the [[11/]] directory),
+but even though it works fine on the example
+with two micro-chips and two generators,
+it takes too much memory on the real input and
+Linux just kills the process.  I guess this
+means I need to go back to the drawing board.
+
+\section{Solution A}
+
+I believe that the basic idea of my previous
+attempt was sound (brute-forcing the solution),
+but using structs and vectors probably required
+too much memory for a larger input size.
+Let's try with bit twiddling this time, and see
+if I can get anywhere.
+
+\section{State of the building}
+
+In my previous solution, the state of the building
+had a field for the current location of the elevator,
+and a 2D matrix of bools (made with vectors)
+described the content of each floor.
+
+My new goal is to store the same information in a
+single word of memory ([[usize]]).  At one point,
+there were over 2.3M states in the BFS queue;
+I really hope that by using words, the memory usage
+can stay in check until we find the answer.
+
+\paragraph{State representation}
+The input of the problem has 4 floors, and 10 components:
+we can use the lower 40 bits to store this configuration.
+We use an extra two bits to store the current floor
+($0 \ldots 3$).
+
+Let's define some constants to give meaningful names
+to otherwise magic numbers. (By the way, I am very
+grateful that Rust has binary literals, I find them
+much more approachable for bit twiddling than
+hex literals.)
+
+<<constants>>=
+const BITS_PER_FLOOR: usize = 10;
+const FLOORS: usize = 4;
+const COMPONENTS: usize = BITS_PER_FLOOR / 2;
+const FLOOR_MASK: usize = 0b11_1111_1111;
+const ALL_FLOORS_MASK: usize = 0xFF_FFFF_FFFF;
+const WHOLE_MASK: usize = 0x3FF_FFFF_FFFF;
+const ELEVATOR_MASK: usize = 0b11;
+const BOT_FLOOR: usize = 0;
+const TOP_FLOOR: usize = 3;
+const GENERATOR_MASK: usize = 0b10_1010_1010;
+const GEN_CHIP_MASK: usize = 0b11;
+const UNPROTECTED_CHIP: usize = 0b01;
+@
+
+\paragraph{Extracting a floor}
+Let's write a function to get the content of a
+specific floor.  We don't check that the floor
+is in the right range.
+
+<<functions>>=
+fn floor(s: usize, floor: usize) -> usize {
+    (s >> BITS_PER_FLOOR * floor) & FLOOR_MASK
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_floor() {
+    use super::{floor, BITS_PER_FLOOR};
+    let f1 = 0b1010101010;
+    let f2 = 0b1100110011;
+    let f3 = 0b1110001110;
+    let f4 = 0b1111000011;
+    let s = (f4 << 3 * BITS_PER_FLOOR)
+          | (f3 << 2 * BITS_PER_FLOOR)
+          | (f2 << 1 * BITS_PER_FLOOR)
+          | f1;
+    assert_eq!(f1, floor(s, 0));
+    assert_eq!(f2, floor(s, 1));
+    assert_eq!(f3, floor(s, 2));
+    assert_eq!(f4, floor(s, 3));
+}
+@
+
+\paragraph{Elevator}
+Similarly to floors, we use some bit-fiddling
+to get the current floor.
+
+<<functions>>=
+fn elevator(s: usize) -> usize {
+    (s >> FLOORS * BITS_PER_FLOOR) & ELEVATOR_MASK
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_elevator() {
+    use super::{elevator, BITS_PER_FLOOR};
+    let s0 = 0;
+    let s1 = 1 << (4 * BITS_PER_FLOOR);
+    let s2 = 2 << (4 * BITS_PER_FLOOR);
+    let s3 = 3 << (4 * BITS_PER_FLOOR);
+    assert_eq!(0, elevator(s0));
+    assert_eq!(1, elevator(s1));
+    assert_eq!(2, elevator(s2));
+    assert_eq!(3, elevator(s3));
+}
+@
+
+\paragraph{Detecting generators}
+Generators can fry incompatible micro-chips
+that aren't shielded.  The following function
+takes a floor and returns [[true]] if there
+are generators, and [[false]] otherwise.
+
+<<functions>>=
+fn has_generators(floor: usize) -> bool {
+    (floor & GENERATOR_MASK) != 0
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_has_generator() {
+    use super::has_generators;
+    assert_eq!(true, has_generators(0b10_0000_0000));
+    assert_eq!(true, has_generators(0b00_1000_0000));
+    assert_eq!(true, has_generators(0b00_0010_0000));
+    assert_eq!(true, has_generators(0b00_0000_1000));
+    assert_eq!(true, has_generators(0b00_0000_0010));
+    assert_eq!(false, has_generators(0b01_0101_0101));
+}
+@
+
+\paragraph{State validity}
+Not all states are valid. Two criteria determine
+if a state is valid: (1) the elevator needs
+to be between 0 and 3 (inclusive); (2) no
+micro-chip should be left unprotected with an
+incompatible generator.
+
+We'll let the [[all_steps]] function deal
+with (1): it won't return steps that would
+put the elevator outside its allowed range.
+
+For (2), a chip at a position $i$ is shield (and safe)
+if its associated generator (at position $i-1$)
+is on the same floor.
+If the chip is not shielded, the floor needs to
+have no generator.
+
+Said differently, a floor is valid if it has
+no generator or if every chip is protected.
+
+<<functions>>=
+fn valid_floor(floor: usize) -> bool {
+    !has_generators(floor)
+    ||
+    (floor & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 2) & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 4) & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 6) & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 8) & GEN_CHIP_MASK != UNPROTECTED_CHIP)
+}
+@
+
+Now let's check that all floors are valid.
+
+<<functions>>=
+fn valid(s: usize) -> bool {
+    valid_floor(s & FLOOR_MASK)
+    && valid_floor((s >> BITS_PER_FLOOR) & FLOOR_MASK)
+    && valid_floor((s >> 2*BITS_PER_FLOOR) & FLOOR_MASK)
+    && valid_floor((s >> 3*BITS_PER_FLOOR) & FLOOR_MASK)
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_valid() {
+    use super::{valid_floor};
+    assert_eq!(true, valid_floor(0b00_0000_0000));
+    assert_eq!(true, valid_floor(0b10_1010_1010));
+    assert_eq!(true, valid_floor(0b10_1010_1011));
+    assert_eq!(true, valid_floor(0b01_0101_0101));
+    assert_eq!(false, valid_floor(0b01_0101_0111));
+}
+@
+
+
+\section{Moving parts around}
+
+With our state manipulation functions in place,
+let's now define a way to move the components
+from one floor to the next.
+
+There are three actions that need to happen
+to move from one state to another:
+
+\begin{enumerate}
+\item the bits of the moved components need to
+  be turned off on the source floor;
+\item the bits of the moved components need to
+  be turned on on the destination floor;
+\item the elevator needs to be updated.
+\end{enumerate}
+
+\paragraph{Updating the elevator}
+Let's start with the simpler of these problems,
+updating the elevator.  We can define a function
+to give it a new value.
+
+<<functions>>=
+fn set_elevator(s: usize, new_floor: usize) -> usize {
+    (new_floor << (FLOORS * BITS_PER_FLOOR)) |
+    (s & ALL_FLOORS_MASK)
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_set_elevator() {
+    use super::{elevator, set_elevator};
+    assert_eq!(0, elevator(set_elevator(0, 0)));
+    assert_eq!(1, elevator(set_elevator(0, 1)));
+    assert_eq!(2, elevator(set_elevator(0, 2)));
+    assert_eq!(3, elevator(set_elevator(0, 3)));
+}
+@
+
+\paragraph{Moving the components}
+We move components between two neighbor floors
+by flipping off the components' bits in the source
+and flipping on the same bits in the destination.
+
+We can turn off the bits in the source by creating a
+string of 1s except for the bits corresponding
+to the moved components and applying the
+bitwise-and operator.
+
+Similarly, we can turn on the bits in the destination
+by creating a string of all 0s except for the bits
+corresponding to the moved components
+and applying the bitwise-or operator.
+
+Combining both operations yields the new state
+of the floors.
+
+<<functions>>=
+fn update_floors(s: usize, src: usize, dst: usize,
+    components: &[usize]) -> usize {
+    let mut turn_off = 0;
+    let mut turn_on  = 0;
+    for c in components {
+        let bit_off = 1 << ((src * BITS_PER_FLOOR) + *c);
+        let bit_on = 1 << ((dst * BITS_PER_FLOOR) + *c);
+        turn_off |= bit_off;
+        turn_on |= bit_on;
+    }
+    (s & !turn_off) | turn_on
+}
+@
+
+\paragraph{Complete state transition}
+We can then put all the elements together to
+perform a complete state transition.
+
+<<functions>>=
+fn transition(s: usize, src: usize, dst: usize,
+    components: &[usize]) -> usize {
+    set_elevator(update_floors(s, src, dst, components), dst)
+}
+@
+
+\section{Generating transitions}
+
+<<functions>>=
+fn gen_transitions(s: usize) -> Vec<usize> {
+    let src = elevator(s);
+    let curr_floor = floor(s, src);
+    let mut trans = Vec::new();
+    for i in 0 .. BITS_PER_FLOOR {
+        if curr_floor & (1 << i) == 0 { continue; }
+        if src < TOP_FLOOR {
+            let t = transition(s, src, src+1, &[i]);
+            if valid(t) { trans.push(t); }
+        }
+        if src > BOT_FLOOR {
+            let t = transition(s, src, src-1, &[i]);
+            if valid(t) { trans.push(t); }
+        }
+        for j in i+1 .. BITS_PER_FLOOR {
+            if curr_floor & (1 << j) == 0 { continue; }
+            if src < TOP_FLOOR {
+                let t = transition(s, src, src+1, &[i, j]);
+                if valid(t) { trans.push(t); }
+            }
+            if src > BOT_FLOOR {
+                let t = transition(s, src, src-1, &[i, j]);
+                if valid(t) { trans.push(t); }
+            }
+        }
+    }
+    return trans;
+}
+@
+
+
+\section{Search}
+
+All the building blocks are in place, we can
+now perform our search.
+
+<<imports>>=
+use std::collections::{VecDeque, HashSet};
+@
+
+<<functions>>=
+fn search(src: usize, dst: usize) -> usize {
+    let mut queue = VecDeque::new();
+    let mut seen = HashSet::new();
+
+    queue.push_front((0, src));
+
+    while !queue.is_empty() {
+        let (steps, curr_state) = queue.pop_back().expect("empty queue");
+        seen.insert(curr_state);
+
+        if curr_state == dst { return steps; }
+
+        for succ_state in gen_transitions(curr_state) {
+            if !seen.contains(&succ_state) {
+                queue.push_front((steps+1, succ_state));
+            }
+        }
+    }
+
+    return 0xffff;
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+<<imports>>
+<<constants>>
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    /*
+    // Example
+    let src =
+          0b00_0000_0000 << 3 * BITS_PER_FLOOR
+        | 0b00_0000_0010 << 2 * BITS_PER_FLOOR
+        | 0b00_0000_1000 << BITS_PER_FLOOR
+        | 0b00_0000_0101;
+    let dst = set_elevator(
+          0b00_0000_1111 << 3 * BITS_PER_FLOOR
+        | 0b00_0000_0000 << 2 * BITS_PER_FLOOR
+        | 0b00_0000_0000 << BITS_PER_FLOOR
+        | 0b00_0000_0000, 3);
+    println!("A: {}", search(src, dst));
+    */
+
+    let src =
+          0b00_0000_0000 << 3 * BITS_PER_FLOOR
+        | 0b00_0101_0101 << 2 * BITS_PER_FLOOR
+        | 0b00_1010_1010 << BITS_PER_FLOOR
+        | 0b11_0000_0000;
+    let dst = set_elevator(
+        0b11_1111_1111 << 3 * BITS_PER_FLOOR, 3);
+    println!("A: {}", search(src, dst));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+
+<<unit tests>>=
+#[test]
+fn test_update_floor() {
+    use super::{floor, elevator,
+        set_elevator, update_floors,
+        BITS_PER_FLOOR};
+    let e = set_elevator(0, 1);
+    let f3 = 0b00_0000_0000;
+    let f2 = 0b00_1111_0000;
+    let f1 = 0b00_0000_1111;
+    let f0 = 0b00_0000_0000;
+    let s0 = f3 << 3 * BITS_PER_FLOOR
+        | f2 << 2 * BITS_PER_FLOOR
+        | f1 << BITS_PER_FLOOR
+        | f0
+        | e;
+    assert_eq!(1, elevator(s0));
+    assert_eq!(f3, floor(s0, 3));
+    assert_eq!(f2, floor(s0, 2));
+    assert_eq!(f1, floor(s0, 1));
+    assert_eq!(f0, floor(s0, 0));
+
+    let s1 = update_floors(s0, 1, 2, &[0, 1]);
+    assert_eq!(1, elevator(s1));
+    assert_eq!(f3, floor(s1, 3));
+    assert_eq!(0b00_1111_0011, floor(s1, 2));
+    assert_eq!(0b00_0000_1100, floor(s1, 1));
+    assert_eq!(f0, floor(s1, 0));
+}
+@
+
+
+\end{appendices}
+
+\end{document}
