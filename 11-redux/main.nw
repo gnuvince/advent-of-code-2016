@@ -44,8 +44,10 @@ I really hope that by using words, the memory usage
 can stay in check until we find the answer.
 
 \paragraph{State representation}
-The input of the problem has 4 floors, and 10 components:
-we can use the lower 40 bits to store this configuration.
+The input of the problem has 4 floors, and 10
+(\textbf{Part B:} 14) components:
+we can use the lower 40 bits (\textbf{Part B:} 56)
+to store this configuration.
 We use an extra two bits to store the current floor
 ($0 \ldots 3$).
 
@@ -56,16 +58,14 @@ much more approachable for bit twiddling than
 hex literals.)
 
 <<constants>>=
-const BITS_PER_FLOOR: usize = 10;
+const BITS_PER_FLOOR: usize = 14; // Update for part B
 const FLOORS: usize = 4;
-const COMPONENTS: usize = BITS_PER_FLOOR / 2;
-const FLOOR_MASK: usize = 0b11_1111_1111;
-const ALL_FLOORS_MASK: usize = 0xFF_FFFF_FFFF;
-const WHOLE_MASK: usize = 0x3FF_FFFF_FFFF;
+const FLOOR_MASK: usize = 0b11_1111_1111_1111;
+const ALL_FLOORS_MASK: usize = !(!0 << BITS_PER_FLOOR * FLOORS);
 const ELEVATOR_MASK: usize = 0b11;
 const BOT_FLOOR: usize = 0;
 const TOP_FLOOR: usize = 3;
-const GENERATOR_MASK: usize = 0b10_1010_1010;
+const GENERATOR_MASK: usize = 0b10_1010_1010_1010;
 const GEN_CHIP_MASK: usize = 0b11;
 const UNPROTECTED_CHIP: usize = 0b01;
 @
@@ -178,7 +178,9 @@ fn valid_floor(floor: usize) -> bool {
      && (floor >> 2) & GEN_CHIP_MASK != UNPROTECTED_CHIP
      && (floor >> 4) & GEN_CHIP_MASK != UNPROTECTED_CHIP
      && (floor >> 6) & GEN_CHIP_MASK != UNPROTECTED_CHIP
-     && (floor >> 8) & GEN_CHIP_MASK != UNPROTECTED_CHIP)
+     && (floor >> 8) & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 10) & GEN_CHIP_MASK != UNPROTECTED_CHIP
+     && (floor >> 12) & GEN_CHIP_MASK != UNPROTECTED_CHIP)
 }
 @
 
@@ -342,12 +344,11 @@ fn search(src: usize, dst: usize) -> usize {
 
     while !queue.is_empty() {
         let (steps, curr_state) = queue.pop_back().expect("empty queue");
-        seen.insert(curr_state);
-
-        if curr_state == dst { return steps; }
 
         for succ_state in gen_transitions(curr_state) {
+            if succ_state == dst { return steps+1; }
             if !seen.contains(&succ_state) {
+                seen.insert(succ_state);
                 queue.push_front((steps+1, succ_state));
             }
         }
@@ -356,6 +357,15 @@ fn search(src: usize, dst: usize) -> usize {
     return 0xffff;
 }
 @
+
+\section{Problem B}
+
+Oh come on!  The one time I hard code
+a lot of the problem's contraints, they
+go ahead and change the input!
+
+Let's hope I can make all the changes without
+breaking solution A.
 
 
 
@@ -371,12 +381,12 @@ fn search(src: usize, dst: usize) -> usize {
 fn main() {
     /*
     // Example
-    let src =
+    let src_a =
           0b00_0000_0000 << 3 * BITS_PER_FLOOR
         | 0b00_0000_0010 << 2 * BITS_PER_FLOOR
         | 0b00_0000_1000 << BITS_PER_FLOOR
         | 0b00_0000_0101;
-    let dst = set_elevator(
+    let dst_a = set_elevator(
           0b00_0000_1111 << 3 * BITS_PER_FLOOR
         | 0b00_0000_0000 << 2 * BITS_PER_FLOOR
         | 0b00_0000_0000 << BITS_PER_FLOOR
@@ -384,14 +394,24 @@ fn main() {
     println!("A: {}", search(src, dst));
     */
 
-    let src =
+    let src_a =
           0b00_0000_0000 << 3 * BITS_PER_FLOOR
         | 0b00_0101_0101 << 2 * BITS_PER_FLOOR
         | 0b00_1010_1010 << BITS_PER_FLOOR
         | 0b11_0000_0000;
-    let dst = set_elevator(
+    let dst_a = set_elevator(
         0b11_1111_1111 << 3 * BITS_PER_FLOOR, 3);
-    println!("A: {}", search(src, dst));
+    println!("A: {}", search(src_a, dst_a));
+
+
+    let src_b =
+          0b00_0000_0000_0000 << 3 * BITS_PER_FLOOR
+        | 0b00_0000_0101_0101 << 2 * BITS_PER_FLOOR
+        | 0b00_0000_1010_1010 << BITS_PER_FLOOR
+        | 0b11_1111_0000_0000;
+    let dst_b = set_elevator(
+        0b11_1111_1111_1111 << 3 * BITS_PER_FLOOR, 3);
+    println!("B: {}", search(src_b, dst_b));
 }
 @
 
