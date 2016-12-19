@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 11: Radioisotope Thermoelectric Generators}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

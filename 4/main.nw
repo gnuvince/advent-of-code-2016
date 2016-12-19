@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 4: Security Through Obscurity}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

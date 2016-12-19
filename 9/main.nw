@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 9: Explosives in Cyberspace}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

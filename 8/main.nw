@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 8: Two-Factor Authentication}
+
 \begin{document}
+
+\maketitle{}
 
 I was busy last evening, so I'm writing this program
 a day late.  This is not necessarily a bad thing, because

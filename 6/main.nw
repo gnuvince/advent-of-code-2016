@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 6: Signals and Noise}
+
 \begin{document}
+
+\maketitle{}
 
 It's 10:30 PM, I had a bunch of other things to do,
 so I'm probably going to be extremely terse in my

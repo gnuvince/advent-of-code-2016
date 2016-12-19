@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 14: One-Time Pad}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

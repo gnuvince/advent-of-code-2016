@@ -5,7 +5,11 @@
 \usepackage{parskip}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 1: No Time for a Taxicab}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Introduction}
 

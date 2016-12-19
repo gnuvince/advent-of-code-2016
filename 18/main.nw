@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 18: Like a Rogue}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

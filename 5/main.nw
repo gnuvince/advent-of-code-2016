@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 5: How About a Nice Game of Chess?}
+
 \begin{document}
+
+\maketitle{}
 
 This is the first solution that requires Cargo,
 because I need to fetch the [[rust-crypto]]

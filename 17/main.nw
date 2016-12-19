@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 17: Two Steps Forward}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 

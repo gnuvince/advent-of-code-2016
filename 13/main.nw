@@ -8,7 +8,11 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
+\title{Day 13: A Maze of Twisty Little Cubicles}
+
 \begin{document}
+
+\maketitle{}
 
 \section{Problem A}
 
