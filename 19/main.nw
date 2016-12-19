@@ -1,0 +1,121 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 19: An Elephant Named Joseph}
+
+\begin{document}
+
+\maketitle{}
+
+\section{Problem A}
+
+Today's problem sounds lovely, and contrary to
+some puzzles seems quite a propos for the time
+of year: Elves swapping presents.
+
+One by one, each Elf steals all the present from
+the next Elf until one Elf has all the gifts.
+
+\section{Solution A}
+
+Let's use a brute-force approach for part A:
+create a vector containing the number of gifts
+of each Elf: [[elves[i]]] contains the number
+of gifts Elf $i+1$ currently possess.
+
+Starting at $i=0$, we steal all the gifts from
+the the next Elf (skipping those that have
+no gifts) until one Elf has all the gifts.
+
+<<functions>>=
+fn solve_a(n: usize) -> usize {
+    let mut elves: Vec<usize> = iter::repeat(1).take(n).collect();
+    let mut i = 0;
+    loop {
+        if elves[i] == n { return i; }
+        if elves[i] != 0 {
+            let mut j = (i + 1) % n;
+            while j != i && elves[j] == 0 {
+                j = (j + 1) % n;
+            }
+            elves[i] += elves[j];
+            elves[j] = 0;
+        }
+        i = (i + 1) % n;
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_solve_a() {
+    use super::solve_a;
+    assert_eq!(2, solve_a(5));
+}
+@
+
+
+\section{Solution B}
+
+<<functions>>=
+fn solve_b(n: usize) -> usize {
+    let mut elves: Vec<(usize, usize)> = iter::repeat(1).enumerate().take(n).collect();
+    let mut i = 0;
+    loop {
+        if elves.len() == 1 {
+            return elves[0].0;
+        }
+
+        let len = elves.len();
+        let front = (i + len / 2) % len;
+        let (_, gifts) = elves[front];
+        elves[i].1 += gifts;
+        i = (i + 1) % elves.len();
+        elves.remove(front);
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_solve_b() {
+    use super::solve_b;
+    assert_eq!(1, solve_b(5));
+}
+@
+
+\section{Putting it all together}
+
+<<*>>=
+use std::iter;
+
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    println!("A: {}", 1 + solve_a(3001330));
+    println!("B: {}", 1 + solve_b(3001330));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
