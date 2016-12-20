@@ -1,0 +1,156 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 20: Firewall Rules}
+
+\begin{document}
+
+\maketitle{}
+
+\section{Problem A}
+
+Today's problem is about intervals;
+we are given a list of integer intervals
+(representing IP address ranges, so between
+0 and $2^{32}-1$) and we must figure
+out the smallest integer not covered by
+any interval.
+
+\section{Solution A}
+
+I tried to think of a clever way to do
+this problem in the metro, but let me do
+something different today: I'll code the
+naïve way first (keep a vector of 4 billion
+elements) that is obviously correct and
+I'll use it to test alternative approaches.
+
+\section{Parsing}
+
+Before we get to implementing the solution(s),
+let's parse the intervals into a vector.
+We shall represent intervals with a tuple.
+
+IP addresses fit in a [[u32]], however for
+convenience we'll use [[usize]] to allow us
+to index in a vector without having to cast.
+
+<<functions>>=
+fn parse_range(s: &str) -> (usize, usize) {
+    let ends: Vec<&str> = s.split('-').collect();
+    (ends[0].parse::<usize>().unwrap(),
+     ends[1].parse::<usize>().unwrap())
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parse_range() {
+    use super::parse_range;
+    assert_eq!((3, 12), parse_range("3-12"));
+    assert_eq!((20, 200), parse_range("20-200"));
+}
+@
+
+\section{Dumb approach}
+
+Our dumb solution is quite straight-forward:
+create an array of 4 billion elements initialized
+to [[false]] (for not black listed);
+for each range, set the corresponding
+elements to [[true]].  Once through, find the first
+index that is still [[false]], i.e., not black listed.
+Easy.
+
+<<functions>>=
+fn solve_a_dumb(intervals: &[(usize, usize)]) -> usize {
+    let mut black_listed: Vec<bool> = iter::repeat(false)
+        .take(u32::max_value() as usize + 1)
+        .collect();
+    for interval in intervals {
+        for i in interval.0 .. interval.1 + 1 {
+            black_listed[i] = true;
+        }
+    }
+
+    for i in 0 .. black_listed.len() {
+        if !black_listed[i] {
+            return i;
+        }
+    }
+    return 0;
+}
+@
+
+\section{Solution B}
+
+Part B asks us to count how many IPs are allowed,
+i.e., not black listed.  Let's use the dumb same approach.
+
+
+<<functions>>=
+fn solve_b_dumb(intervals: &[(usize, usize)]) -> usize {
+    let mut black_listed: Vec<bool> = iter::repeat(false)
+        .take(u32::max_value() as usize + 1)
+        .collect();
+    for interval in intervals {
+        for i in interval.0 .. interval.1 + 1 {
+            black_listed[i] = true;
+        }
+    }
+
+    let mut not_black_listed = 0;
+    for i in 0 .. black_listed.len() {
+        if !black_listed[i] {
+            not_black_listed += 1;
+        }
+    }
+    return not_black_listed;
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::iter;
+use std::io;
+
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut intervals = Vec::new();
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        intervals.push(parse_range(&buf.trim()));
+        buf.clear();
+    }
+    println!("A: {}", solve_a_dumb(&intervals));
+    println!("B: {}", solve_b_dumb(&intervals));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}
