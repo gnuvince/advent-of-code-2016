@@ -31,7 +31,7 @@ of each Elf: [[elves[i]]] contains the number
 of gifts Elf $i+1$ currently possess.
 
 Starting at $i=0$, we steal all the gifts from
-the the next Elf (skipping those that have
+the next Elf (skipping those that have
 no gifts) until one Elf has all the gifts.
 
 <<functions>>=
@@ -61,25 +61,66 @@ fn test_solve_a() {
 }
 @
 
+It occurs to me that if the number of elves
+was a power of 2, Elf 0 would have all the
+gifts: after one round, only Elves 0, 2, 4, 6, etc.
+would remain, after a second round only
+elves 0, 4, 8, 12, etc., after a third
+round elves 0, 8, 16, 24, etc.
+
+I'm not exactly sure how it would work with
+a number that's not a power of 2, but it's
+something to think about!
+
 
 \section{Solution B}
 
+After trying a few variations of part A,
+it seems I'm going to need something radically
+different for part B.
+I made a few solutions work with the small 5 Elves
+example, but they take way too long on the real
+input.
+Not too surprising since most of my techniques
+thus far have had an $O(n^2)$ complexity.
+
+After observing the input/output pairs for a bunch
+of values, I came up with the solution: it's the
+difference between $n$ and the highest power of 3 less
+than $n$.
+
 <<functions>>=
 fn solve_b(n: usize) -> usize {
-    let mut elves: Vec<(usize, usize)> = iter::repeat(1).enumerate().take(n).collect();
-    let mut i = 0;
-    loop {
-        if elves.len() == 1 {
-            return elves[0].0;
-        }
+    let b = (n as f64).log(3.0) as u32;
+    let p = 3_usize.pow(b);
+    return n - p;
+}
 
-        let len = elves.len();
-        let front = (i + len / 2) % len;
-        let (_, gifts) = elves[front];
-        elves[i].1 += gifts;
-        i = (i + 1) % elves.len();
-        elves.remove(front);
+
+fn solve_b_slow(n: usize) -> usize {
+    let mut elves: Vec<usize> = iter::repeat(1).take(n).collect();
+    let mut i = 0;
+    let mut alive = n;
+    while alive != 1 {
+        // Find next alive
+        while elves[i] == 0 {
+            i = (i + 1) % n;
+        }
+        //println!("{} {:?}", i, elves);
+        let mut half_len = alive / 2;
+        let mut j = i;
+        while half_len != 0 {
+            j = (j + 1) % n;
+            if elves[j] != 0 {
+                half_len -= 1;
+            }
+        }
+        elves[j] = 0;
+        alive -= 1;
+        i = (i + 1) % n;
     }
+    //println!("{} {:?}", i, elves);
+    return 1 + elves.iter().position(|x| *x == 1).unwrap();
 }
 @
 
@@ -95,13 +136,15 @@ fn test_solve_b() {
 
 <<*>>=
 use std::iter;
+use std::collections::HashSet;
 
 <<functions>>
 
 #[cfg(not(test))]
 fn main() {
     println!("A: {}", 1 + solve_a(3001330));
-    println!("B: {}", 1 + solve_b(3001330));
+    println!("B: {}", solve_b(3001330));
+    println!("B: {}", solve_b_vince(3001330));
 }
 @
 
