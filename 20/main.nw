@@ -116,13 +116,141 @@ fn solve_b_dumb(intervals: &[(usize, usize)]) -> usize {
 }
 @
 
+\section{Being smarter about intervals}
 
+A little examination shows that the intervals
+in the input can overlap (i.e., the same IP
+can be contained in multiple intervals).
+
+If the intervals didn't overlap and were ordered,
+we could find our answers more easily.
+For instance, in part A, the first IP that
+is not black listed would be $b_i+1$ where
+$(a_i, b_i)$ is an interval and $(a_{i+1}, b_{i+1})$
+is the next interval and $b_i \ne a_{i+1}$,
+i.e., there is a gap between the two intervals.
+
+\paragraph{Mergeability}
+Let $X$ be the interval $(a, b)$,
+and $Y$ be the interval $(c, d)$.
+We assume that $a \le b$,
+$c \le d$, and $a \le c$.
+$X$ and $Y$ can be merged if
+they overlap ($b$ is greater than $c$)
+or if they are contiguous
+($b+1 = c$).
+
+<<functions>>=
+fn mergeable(x: (usize, usize), y: (usize, usize)) -> bool {
+    x.1 + 1 >= y.0
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_mergeable() {
+    use super::mergeable;
+    assert_eq!(true, mergeable((1, 6), (5, 10)));
+    assert_eq!(true, mergeable((1, 5), (5, 10)));
+    assert_eq!(true, mergeable((1, 4), (5, 10)));
+    assert_eq!(false, mergeable((1, 3), (5, 10)));
+}
+@
+
+\paragraph{Merging two intervals}
+We can merge $X$ and $Y$ by taking
+the minimum of $a$ and $c$,
+and the maximum of $b$ and $d$.
+
+<<functions>>=
+fn merge(x: (usize, usize), y: (usize, usize)) -> (usize, usize) {
+    (cmp::min(x.0, y.0), cmp::max(x.1, y.1))
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_merge() {
+    use super::merge;
+    assert_eq!((1, 10), merge((1, 5), (5, 10)));
+    assert_eq!((1, 10), merge((1, 5), (3, 10)));
+    assert_eq!((1, 10), merge((5, 10), (1, 5)));
+    assert_eq!((1, 10), merge((3, 10), (1, 5)));
+}
+@
+
+\paragraph{Merging multiple intervals}
+We can merge a vector of intervals by
+repeatedly merging intervals.
+
+For example, if the first and second
+intervals are mergeable, we merge them
+and then verify if that new interval
+can be merged with the third input interval
+and so on.
+
+<<functions>>=
+fn merge_all(intervals: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut merged = Vec::new();
+    merged.push(intervals[0]);
+
+    for interval in intervals[1..].iter() {
+        let n = merged.len();
+        if mergeable(merged[n-1], *interval) {
+            merged[n-1] = merge(merged[n-1], *interval);
+        } else {
+            merged.push(*interval);
+        }
+    }
+
+    return merged;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_merge_all() {
+    use super::merge_all;
+    let mut v = vec![(1, 3), (3, 5), (7, 8)];
+    assert_eq!(vec![(1,5), (7,8)], merge_all(&mut v));
+}
+@
+
+\paragraph{Solving A intelligently}
+Solving Part A becomes quite straight-forward now:
+given a list of sorted intervals, we merge them
+together, and return the first interval's end point
+plus one.
+
+<<functions>>=
+fn solve_a_intelligently(intervals: &[(usize, usize)]) -> usize {
+    let merged = merge_all(intervals);
+    return merged[0].1 + 1;
+}
+@
+
+\paragraph{Solving B intelligently}
+Solving Part B is similarly straight-forward:
+once we have the list of intervals, we add
+the gaps between them.
+
+<<functions>>=
+fn solve_b_intelligently(intervals: &[(usize, usize)]) -> usize {
+    let merged = merge_all(intervals);
+    let mut not_black_listed = 0;
+    for i in 1 .. merged.len() {
+        not_black_listed += merged[i].0 - merged[i-1].1 - 1;
+    }
+    return not_black_listed;
+}
+@
 
 \section{Putting it all together}
 
 <<*>>=
-use std::iter;
+use std::cmp;
 use std::io;
+use std::iter;
 
 <<functions>>
 
@@ -135,8 +263,9 @@ fn main() {
         intervals.push(parse_range(&buf.trim()));
         buf.clear();
     }
-    println!("A: {}", solve_a_dumb(&intervals));
-    println!("B: {}", solve_b_dumb(&intervals));
+    intervals.sort();
+    println!("A: {}", solve_a_intelligently(&intervals));
+    println!("B: {}", solve_b_intelligently(&intervals));
 }
 @
 
