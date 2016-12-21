@@ -1,6 +1,7 @@
 \documentclass{article}
 
 \usepackage{noweb}
+\usepackage[utf8]{inputenc}
 \usepackage{geometry}
 \usepackage{parskip}
 \usepackage{amsmath}
@@ -64,10 +65,10 @@ fn test_parse_range() {
 Our dumb solution is quite straight-forward:
 create an array of 4 billion elements initialized
 to [[false]] (for not black listed);
-for each range, set the corresponding
-elements to [[true]].  Once through, find the first
-index that is still [[false]], i.e., not black listed.
-Easy.
+for each number in an interval, set the corresponding
+array element to [[true]].  Once that phase is done,
+find the first index that is still [[false]],
+i.e., not black listed. Easy.
 
 <<functions>>=
 fn solve_a_dumb(intervals: &[(usize, usize)]) -> usize {
@@ -92,7 +93,7 @@ fn solve_a_dumb(intervals: &[(usize, usize)]) -> usize {
 \section{Solution B}
 
 Part B asks us to count how many IPs are allowed,
-i.e., not black listed.  Let's use the dumb same approach.
+i.e., not black listed.  Let's use the same dumb approach.
 
 
 <<functions>>=
@@ -118,27 +119,41 @@ fn solve_b_dumb(intervals: &[(usize, usize)]) -> usize {
 
 \section{Being smarter about intervals}
 
-A little examination shows that the intervals
-in the input can overlap (i.e., the same IP
-can be contained in multiple intervals).
+The two solutions above worked, and gave
+an answer in about 6 seconds for A and 10
+seconds for B.  Not great, but certainly
+a nice demonstration that an unsophisticated
+approach can be coded quickly and easily
+and yield a correct response.  Still, let's
+spend some time figuring out a better solution,
+i.e., something that doesn't require gigabytes
+of memory.
+
+First, let's learn a little something about
+our input data.  There are two things we should
+know:
+the intervals in the input can overlap
+(i.e., the same IP can be contained in multiple intervals),
+and the intervals are not sorted.
 
 If the intervals didn't overlap and were ordered,
-we could find our answers more easily.
+we could find our answers more eansily.
 For instance, in part A, the first IP that
-is not black listed would be $b_i+1$ where
-$(a_i, b_i)$ is an interval and $(a_{i+1}, b_{i+1})$
-is the next interval and $b_i \ne a_{i+1}$,
-i.e., there is a gap between the two intervals.
+is not black listed would be the one more
+than the end point of the first interval.
 
 \paragraph{Mergeability}
-Let $X$ be the interval $(a, b)$,
-and $Y$ be the interval $(c, d)$.
-We assume that $a \le b$,
-$c \le d$, and $a \le c$.
-$X$ and $Y$ can be merged if
-they overlap ($b$ is greater than $c$)
-or if they are contiguous
-($b+1 = c$).
+Suppose that we have two intervals, $(a,b)$ and $(c,d)$.
+Further suppose that $a \le b$, $c \le d$, and $a \le c$.
+We can merge these intervals in two cases:
+\begin{enumerate}
+\item if $b \ge c$, i.e., the first interval
+  overlaps with the second;
+\item if $b+1 = c$, i.e., the second interval
+  begins exactly where the first one ends.
+\end{enumerate}
+
+We check both cases (using only one condition) in the [[mergeable]] function.
 
 <<functions>>=
 fn mergeable(x: (usize, usize), y: (usize, usize)) -> bool {
@@ -158,13 +173,14 @@ fn test_mergeable() {
 @
 
 \paragraph{Merging two intervals}
-We can merge $X$ and $Y$ by taking
-the minimum of $a$ and $c$,
-and the maximum of $b$ and $d$.
+We can merge two intervals by creating a new
+one which begins at $a$ (remember our invariant,
+$a$ is always lesser than or equal to $c$)
+and which ends at $max(b,d)$.
 
 <<functions>>=
 fn merge(x: (usize, usize), y: (usize, usize)) -> (usize, usize) {
-    (cmp::min(x.0, y.0), cmp::max(x.1, y.1))
+    (x.0, cmp::max(x.1, y.1))
 }
 @
 
@@ -172,22 +188,24 @@ fn merge(x: (usize, usize), y: (usize, usize)) -> (usize, usize) {
 #[test]
 fn test_merge() {
     use super::merge;
+    assert_eq!((1, 10), merge((1, 5), (6, 10)));
     assert_eq!((1, 10), merge((1, 5), (5, 10)));
     assert_eq!((1, 10), merge((1, 5), (3, 10)));
-    assert_eq!((1, 10), merge((5, 10), (1, 5)));
-    assert_eq!((1, 10), merge((3, 10), (1, 5)));
 }
 @
 
 \paragraph{Merging multiple intervals}
-We can merge a vector of intervals by
-repeatedly merging intervals.
+To merge a vector of intervals, we
+repeatedly merge intervals until
+two intervals are not mergeable.
 
 For example, if the first and second
-intervals are mergeable, we merge them
-and then verify if that new interval
+intervals are mergeable, we combine them
+and then verify if this new interval
 can be merged with the third input interval
 and so on.
+
+We assume that the input vector is sorted.
 
 <<functions>>=
 fn merge_all(intervals: &[(usize, usize)]) -> Vec<(usize, usize)> {
@@ -217,7 +235,7 @@ fn test_merge_all() {
 @
 
 \paragraph{Solving A intelligently}
-Solving Part A becomes quite straight-forward now:
+Solving Part A is quite straight-forward now:
 given a list of sorted intervals, we merge them
 together, and return the first interval's end point
 plus one.
@@ -232,7 +250,7 @@ fn solve_a_intelligently(intervals: &[(usize, usize)]) -> usize {
 \paragraph{Solving B intelligently}
 Solving Part B is similarly straight-forward:
 once we have the list of intervals, we add
-the gaps between them.
+the number of IPs in the gaps between them.
 
 <<functions>>=
 fn solve_b_intelligently(intervals: &[(usize, usize)]) -> usize {
@@ -246,6 +264,11 @@ fn solve_b_intelligently(intervals: &[(usize, usize)]) -> usize {
 @
 
 \section{Putting it all together}
+
+Using the newer, smarter approach takes
+about 2ms, a very nice improvement both
+in time and in memory over the previous
+solutions (a speed-up of around 8000x).
 
 <<*>>=
 use std::cmp;
