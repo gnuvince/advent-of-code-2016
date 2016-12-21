@@ -224,7 +224,7 @@ Rotating by the position of a letter
 is a bit more complex because of
 arbitrary extra rules.  The shift
 is one more than the position of the
-letter, and if the letter's position
+letter, but if the letter's position
 is greater than four, the shift is two more.
 
 <<eval rotate letter>>=
@@ -253,8 +253,8 @@ while i < j {
 
 \paragraph{Moving}
 To move one letter to another position
-we can use Rust's [[remove]] and [[insert]]
-methods in vectors.
+we can use The vector [[remove]] and [[insert]]
+methods.
 
 <<eval move>>=
 let b = input.remove(pos1);
