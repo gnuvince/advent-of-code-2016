@@ -137,9 +137,9 @@ the intervals in the input can overlap
 and the intervals are not sorted.
 
 If the intervals didn't overlap and were ordered,
-we could find our answers more eansily.
+we could find our answers more easily.
 For instance, in part A, the first IP that
-is not black listed would be the one more
+is not black listed would be one more
 than the end point of the first interval.
 
 \paragraph{Mergeability}
