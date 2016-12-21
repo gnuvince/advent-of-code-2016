@@ -1,5 +1,5 @@
 BIN_DIR="bin"
-DOC_DIR="doc"
+DOC_DIR="pdfs"
 TMP_DIR="tmp"
 
 mkdir -p $BIN_DIR
