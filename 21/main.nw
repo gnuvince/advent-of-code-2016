@@ -1,0 +1,374 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 21: Scrambled Letters and Hash}
+
+\begin{document}
+
+\maketitle{}
+
+
+\section{Problem A}
+
+Today's problems reminds me a little bit of
+the display panel problem with the [[rect]]
+and [[rotate]] functionality.  Basically,
+given an initial input string and a list
+of operations, find the output string.
+I suspect the most annoying part will be
+to parse the instructions.
+
+\section{Solution A}
+
+\paragraph{Outline}
+\begin{itemize}
+\item Scan and parse the instructions and transform them
+  into [[Instr]] records.
+\item Implement a small evaluator for the instructions.
+\item Output the result string.
+\end{itemize}
+
+\paragraph{Instruction definition}
+Let's start by defining the different instructions.
+
+<<data structures>>=
+#[derive(Debug, PartialEq)]
+enum Instr {
+    SwapPos(usize, usize),
+    SwapLetter(u8, u8),
+    RotateLeft(usize),
+    RotateRight(usize),
+    RotatePos(u8),
+    Reverse(usize, usize),
+    Move(usize, usize)
+}
+@
+
+\paragraph{Parsing}
+Let's be lazy today, and implement parsing
+by splitting and inspecting.  I kind of
+wish that once there would be a problem
+that requires real parsing...
+
+<<functions>>=
+fn u8(s: &str) -> u8 {
+    return s.as_bytes()[0];
+}
+
+fn usize(s: &str) -> usize {
+    return s.parse::<usize>().unwrap();
+}
+
+fn parse(s: &str) -> Instr {
+    let toks: Vec<&str> = s.split_whitespace().collect();
+    if toks[0] == "swap" && toks[1] == "position" {
+        return Instr::SwapPos(usize(toks[2]), usize(toks[5]));
+    }
+    if toks[0] == "swap" && toks[1] == "letter" {
+        return Instr::SwapLetter(u8(toks[2]), u8(toks[5]));
+    }
+    if toks[0] == "rotate" && toks[1] == "left" {
+        return Instr::RotateLeft(usize(toks[2]));
+    }
+    if toks[0] == "rotate" && toks[1] == "right" {
+        return Instr::RotateRight(usize(toks[2]));
+    }
+    if toks[0] == "rotate" && toks[1] == "based" {
+        return Instr::RotatePos(u8(toks[6]));
+    }
+    if toks[0] == "reverse" {
+        return Instr::Reverse(usize(toks[2]), usize(toks[4]));
+    }
+    if toks[0] == "move" {
+        return Instr::Move(usize(toks[2]), usize(toks[5]));
+    }
+    panic!("Unknown instruction: {}", s);
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parse() {
+    use super::{parse, Instr};
+    assert_eq!(Instr::SwapPos(42, 121),
+        parse("swap position 42 with position 121"));
+    assert_eq!(Instr::SwapLetter(b'X', b'Y'),
+        parse("swap letter X with letter Y"));
+    assert_eq!(Instr::RotateLeft(3),
+        parse("rotate left 3 steps"));
+    assert_eq!(Instr::RotateRight(3),
+        parse("rotate right 3 steps"));
+    assert_eq!(Instr::RotatePos(b'X'),
+        parse("rotate based on position of letter X"));
+    assert_eq!(Instr::Reverse(42, 121),
+        parse("reverse positions 42 through 121"));
+    assert_eq!(Instr::Move(42, 121),
+        parse("move position 42 to position 121"));
+}
+@
+
+\subsection{Evaluation}
+
+Now that we can translate an instruction from a
+string to an in-memory representation, let's write
+an evaluator.  The overall structure of the
+evaluator is evident: evaluate each instruction
+one-by-one, applying their effect to the input.
+
+<<functions>>=
+fn eval(s: &str, instrs: &[Instr]) -> String {
+    let str: String = s.into();
+    let mut input = str.into_bytes();
+    for instr in instrs {
+        match *instr {
+            Instr::SwapPos(pos1, pos2) => { <<eval swap pos>> }
+            Instr::SwapLetter(let1, let2) => { <<eval swap letter>> }
+            Instr::RotateLeft(shift) => { <<eval rotate left>> }
+            Instr::RotateRight(shift) => { <<eval rotate right>> }
+            Instr::RotatePos(letter) => { <<eval rotate letter>> }
+            Instr::Reverse(pos1, pos2) => { <<eval reverse>> }
+            Instr::Move(pos1, pos2) => { <<eval move>> }
+        }
+    }
+
+    return String::from_utf8(input).unwrap();
+}
+@
+
+\paragraph{Swaps}
+We can swap two letters by using a third,
+temporary, variable.
+
+<<eval swap pos>>=
+let t = input[pos1];
+input[pos1] = input[pos2];
+input[pos2] = t;
+@
+
+To swap two letters, we need to find their indices.
+It appears that the Rust standard library offers
+no such method, so let's whip up something real quick.
+Since we know that the letter we are looking for
+are always in the haystack, we can be loose with
+the default return value (we'll use the maximum
+[[usize]] value).
+
+<<functions>>=
+fn find(haystack: &[u8], needle: u8) -> usize {
+    for i in 0 .. haystack.len() {
+        if haystack[i] == needle { return i; }
+    }
+    return usize::max_value();
+}
+@
+
+Once we have a way to find the index of a letter,
+the evaluation strategy is quite similar to swapping
+two letters by position.
+
+<<eval swap letter>>=
+let pos1 = find(&input, let1);
+let pos2 = find(&input, let2);
+let t = input[pos1];
+input[pos1] = input[pos2];
+input[pos2] = t;
+@
+
+\paragraph{Rotations}
+
+Rotations again?  Okay, sure, let's
+just grab the rotation functions
+from a previous problem.
+
+<<functions>>=
+fn rotate_right<T>(xs: &mut [T], offset: usize) {
+    xs.reverse();
+    {
+        let len = xs.len();
+        let (left, right) = xs.split_at_mut(offset % len);
+        left.reverse();
+        right.reverse();
+    }
+}
+fn rotate_left<T>(xs: &mut [T], offset: usize) {
+    {
+        let len = xs.len();
+        let (left, right) = xs.split_at_mut(offset % len);
+        left.reverse();
+        right.reverse();
+    }
+    xs.reverse();
+}
+@
+
+Then we can do our implementations for
+left and right rotations quite easily.
+
+<<eval rotate left>>=
+rotate_left(&mut input, shift);
+@
+
+<<eval rotate right>>=
+rotate_right(&mut input, shift);
+@
+
+Rotating by the position of a letter
+is a bit more complex because of
+arbitrary extra rules.  The shift
+is one more than the position of the
+letter, and if the letter's position
+is greater than four, the shift is two more.
+
+<<eval rotate letter>>=
+let pos = find(&input, letter);
+let shift = 1 + pos +
+    if pos >= 4 { 1 } else { 0 };
+rotate_right(&mut input, shift);
+@
+
+\paragraph{Reversing}
+Rust's [[reverse]] method doesn't
+allow the user to specify a range,
+so we'll just do the reverse by hand.
+
+<<eval reverse>>=
+let mut i = pos1;
+let mut j = pos2;
+while i < j {
+    let t = input[i];
+    input[i] = input[j];
+    input[j] = t;
+    i += 1;
+    j -= 1;
+}
+@
+
+\paragraph{Moving}
+To move one letter to another position
+we can use Rust's [[remove]] and [[insert]]
+methods in vectors.
+
+<<eval move>>=
+let b = input.remove(pos1);
+input.insert(pos2, b);
+@
+
+\section{Solution B}
+
+I thought about solving B (going from
+an output to its input) by writing
+the inverse evaluation operations,
+however the [[RotatePos]] throws a
+real wrench in the whole idea.  So instead,
+we're gonna brute force it!
+
+Since the string is only 8 characters long,
+there are about 40,000 permutations,
+perfectly okay to brute force.
+
+Let's start by writing a [[permute]] function.
+
+<<functions>>=
+fn permute(input: &Vec<u8>) -> Vec<Vec<u8>> {
+    if input.is_empty() {
+        return vec![vec![]];
+    } else {
+        let n = input.len();
+        let mut out = Vec::new();
+        let mut copy = input.clone();
+        let x = copy.remove(0);
+        let perms = permute(&copy);
+        for i in 0 .. perms.len() {
+            for j in 0 .. perms[i].len() {
+                let mut copy2 = perms[i].clone();
+                copy2.insert(j, x);
+                out.push(copy2);
+            }
+            let mut copy2 = perms[i].clone();
+            copy2.push(x);
+            out.push(copy2);
+        }
+        return out;
+    }
+}
+@
+
+And brute force:
+
+<<functions>>=
+fn brute_force(s: &str, instrs: &[Instr]) -> String {
+    let str: String = s.into();
+    let mut input = str.into_bytes();
+    let perms = permute(&input);
+    for perm in perms {
+        let perm = String::from_utf8(perm).unwrap();
+        if eval(&perm, instrs) == s {
+            return perm
+        }
+    }
+    return String::new();
+}
+@
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut instrs = Vec::new();
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        instrs.push(parse(&buf));
+        buf.clear();
+    }
+    println!("A: {}", eval("abcdefgh", &instrs));
+    println!("B: {}", brute_force("fbgdceah", &instrs));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_eval() {
+    use super::{eval, Instr};
+    let input = "abcdef";
+    assert_eq!("fbcdea", eval(&input, &[Instr::SwapPos(0, 5)]));
+    assert_eq!("adcbef", eval(&input, &[Instr::SwapLetter(b'b', b'd')]));
+    assert_eq!("cdefab", eval(&input, &[Instr::RotateLeft(2)]));
+    assert_eq!("efabcd", eval(&input, &[Instr::RotateRight(2)]));
+    assert_eq!("fabcde", eval(&input, &[Instr::RotatePos(b'a')]));
+    assert_eq!("abcdef", eval(&input, &[Instr::RotatePos(b'e')]));
+    assert_eq!("aedcbf", eval(&input, &[Instr::Reverse(1, 4)]));
+    assert_eq!("bcdaef", eval(&input, &[Instr::Move(0, 3)]));
+}
+@
+
+
+\end{appendices}
+
+\end{document}
