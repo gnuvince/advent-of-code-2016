@@ -1,0 +1,351 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 22: Grid Computing}
+
+\begin{document}
+
+\maketitle{}
+
+
+\section{Problem A}
+
+Another day, another graph search problem?
+The problem for part A seems quite straight-%
+forward, however I foresee a graph traversal
+in part B.
+
+\section{Solution A}
+
+\paragraph{Disk}
+Let's define an appropriate structure for representing
+a disk:
+
+<<data structures>>=
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Clone, Copy)]
+struct Disk {
+    id: (isize, isize),
+    avail: usize,
+    used: usize
+}
+@
+
+\paragraph{Parsing data}
+\emph{Sigh}, more parsing...
+
+<<functions>>=
+fn parse_size(s: &str) -> usize {
+    s[0 .. s.len() - 1].parse::<usize>().unwrap()
+}
+
+fn parse_pos(s: &str) -> isize {
+    s[1..].parse::<isize>().unwrap()
+}
+
+fn parse(s: &str) -> Disk {
+    let toks: Vec<&str> = s.split_whitespace().collect();
+    let name_parts: Vec<&str> = toks[0].split('-').collect();
+    Disk {
+        id: (parse_pos(name_parts[1]), parse_pos(name_parts[2])),
+        used: parse_size(toks[2]),
+        avail: parse_size(toks[3]),
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_parse() {
+    use super::{Disk, parse};
+    assert_eq!(Disk { id: (0, 4), used: 69, avail: 20 },
+        parse("/dev/grid/node-x0-y4     89T   69T    20T   77%"));
+    assert_eq!(Disk { id: (36, 25), used: 67, avail: 20 },
+        parse("/dev/grid/node-x36-y25   87T   67T    20T   77%"));
+}
+@
+
+\paragraph{Finding viable pairs}
+
+<<functions>>=
+fn viable_pair(d1: &Disk, d2: &Disk) -> bool {
+    d1.id != d2.id && d1.used > 0 && d1.used <= d2.avail
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_viable_pair() {
+    use super::{Disk, viable_pair};
+    let d1 = Disk { id: (0, 0), used: 3, avail: 7 };
+    let d2 = Disk { id: (1, 1), used: 5, avail: 5 };
+    let d3 = Disk { id: (2, 2), used: 6, avail: 4 };
+    assert_eq!(false, viable_pair(&d1, &d1));
+    assert_eq!(true , viable_pair(&d1, &d2));
+    assert_eq!(true , viable_pair(&d1, &d3));
+
+    assert_eq!(true , viable_pair(&d2, &d1));
+    assert_eq!(false, viable_pair(&d2, &d2));
+    assert_eq!(false, viable_pair(&d2, &d3));
+
+    assert_eq!(true , viable_pair(&d3, &d1));
+    assert_eq!(false, viable_pair(&d3, &d2));
+    assert_eq!(false, viable_pair(&d3, &d3));
+}
+@
+
+<<functions>>=
+fn solve_a(disks: &[Disk]) -> usize {
+    let mut viable = 0;
+    for i in 0 .. disks.len() {
+        for j in 0 .. disks.len() {
+            if viable_pair(&disks[i], &disks[j]) {
+                viable += 1;
+            }
+        }
+    }
+    return viable;
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_solve_a() {
+    use super::{Disk, solve_a};
+    let disks = vec![
+        Disk { id: (0, 0), used: 3, avail: 7 },
+        Disk { id: (1, 1), used: 5, avail: 5 },
+        Disk { id: (2, 2), used: 6, avail: 4 },
+    ];
+    assert_eq!(4, solve_a(&disks));
+}
+@
+
+\section{Problem B}
+
+Ah, now we get to the serious stuff.
+We want to bring the content from
+node $\langle x=max_x, y=0 \rangle$
+to node $\langle x=0, y=0 \rangle$
+with the fewest amount of moves.
+
+\paragraph{General approach}
+My (initial) approach will be similar to day 11,
+with a small change: since we don't know the
+exact state that we will have at the end, i.e.,
+how much used/available space each node has, we
+will include a token with the payload of
+$\langle x=max_x, y=0 \rangle$, and the BFS
+will be over when the token reaches node
+$\langle x=0, y=0 \rangle$.
+
+Also, we'll create a graph (adjacency list)
+of the nodes that we'll keep updated as we
+move content from nodes to nodes.
+
+\paragraph{Graph structure}
+Let's write a function to convert
+our vector of nodes to a graph.
+We'll proceed in two steps:
+(1) add all the nodes to a hash
+table with an empty vector of
+neighbors;
+(2) for each node, add their
+orthogonal neighbors if they
+are keys in the table.
+
+<<functions>>=
+type NodeId = (isize, isize);
+type NodeInfo = (Disk, bool, Vec<NodeId>);
+
+fn create_graph(disks: &[Disk]) -> HashMap<NodeId, NodeInfo> {
+    let mut g = HashMap::new();
+    for disk in disks {
+        g.insert(disk.id, (disk.clone(), false, vec![]));
+    }
+    for disk in disks {
+        let (x,y) = disk.id;
+        let mut neighbors = vec![];
+        if g.contains_key(&(x-1, y)) { neighbors.push((x-1, y)); }
+        if g.contains_key(&(x+1, y)) { neighbors.push((x+1, y)); }
+        if g.contains_key(&(x, y-1)) { neighbors.push((x, y-1)); }
+        if g.contains_key(&(x, y+1)) { neighbors.push((x, y+1)); }
+        let mut entry = g.get_mut(&(x, y)).unwrap();
+        entry.2 = neighbors;
+    }
+    return g;
+}
+@
+
+\paragraph{Setting the token}
+The token is a boolean; it is [[true]]
+if a node has it, [[false]] otherwise.
+In the [[create_graph]] function, we
+gave the value [[false]] to every
+single node.  Let's now give the token
+to the right-most node of the top row.
+
+<<functions>>=
+fn set_token(g: &mut HashMap<NodeId, NodeInfo>) {
+    let mut x = 0;
+    loop {
+        if g.contains_key(&(x+1, 0)) {
+            x += 1;
+        } else {
+            break;
+        }
+    }
+    let entry = g.get_mut(&(x, 0)).unwrap();
+    entry.1 = true;
+}
+@
+
+\paragraph{Moving data}
+Our function to move data assumes that the
+target node has sufficient available memory
+(we'll use the [[viable_pair]] function to
+test this later).
+
+<<functions>>=
+fn move_data(g: &mut HashMap<NodeId, NodeInfo>, src: &NodeId, dst: &NodeId) {
+    let tok;
+    let move_size;
+    {
+        let mut info = g.get_mut(&src).unwrap();
+        move_size = info.0.used;
+        info.0.avail += move_size;
+        info.0.used = 0;
+        tok = info.1;
+        info.1 = false;
+    }
+    {
+        let mut info = g.get_mut(&dst).unwrap();
+        info.0.avail -= move_size;
+        info.0.used += move_size;
+        info.1 = tok;
+    }
+}
+@
+
+<<unit tests>>=
+#[test]
+fn test_move_data() {
+    use super::{Disk, create_graph, set_token, move_data};
+    let mut g = create_graph(&vec![
+        Disk { id: (0, 0), used: 10, avail: 20 },
+        Disk { id: (1, 0), used: 5, avail: 5 }
+    ]);
+    set_token(&mut g);
+    move_data(&mut g, &(1, 0), &(0, 0));
+    assert_eq!(15, g.get(&(0, 0)).unwrap().0.used);
+    assert_eq!(15, g.get(&(0, 0)).unwrap().0.avail);
+    assert_eq!(true, g.get(&(0, 0)).unwrap().1);
+
+    assert_eq!(0, g.get(&(1, 0)).unwrap().0.used);
+    assert_eq!(10, g.get(&(1, 0)).unwrap().0.avail);
+    assert_eq!(false, g.get(&(1, 0)).unwrap().1);
+}
+@
+
+\paragraph{BFS}
+We can now implement the breadth-first search.
+(Let's hope it doesn't take a billion years like
+my initial stabs at day 11 did.)
+
+<<functions>>=
+fn search(g: &HashMap<NodeId, NodeInfo>) -> isize {
+    let mut queue = VecDeque::new();
+    let mut seen = Vec::new();
+
+    seen.push(g.clone());
+    queue.push_front((0, g.clone()));
+
+    while !queue.is_empty() {
+        let (steps, curr_g) = queue.pop_back().expect("empty queue");
+
+        for (id, info) in curr_g.iter() {
+            for neighbor_id in info.2.iter() {
+                let neighbor_info = curr_g.get(&neighbor_id).unwrap();
+                if viable_pair(&info.0, &neighbor_info.0) {
+                    let mut succ_g = curr_g.clone();
+                    move_data(&mut succ_g, id, neighbor_id);
+                    <<return if finished>>
+                    if !seen.contains(&succ_g) {
+                        seen.push(succ_g.clone());
+                        queue.push_front((steps+1, succ_g));
+                    }
+                }
+            }
+        }
+    }
+    return -1;
+}
+@
+
+<<return if finished>>=
+{
+    let node_info = succ_g.get(&(0, 0)).unwrap();
+    if node_info.1 {
+        return steps+1;
+    }
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+use std::collections::{VecDeque, HashMap};
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut disks = Vec::new();
+
+    // Skip first two lines
+    stdin.read_line(&mut buf);
+    stdin.read_line(&mut buf);
+    buf.clear();
+
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        disks.push(parse(&buf));
+        buf.clear();
+    }
+
+    println!("A: {}", solve_a(&disks));
+
+    let mut g = create_graph(&disks);
+    set_token(&mut g);
+    println!("B: {}", search(&g));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+
+
+\end{appendices}
+
+\end{document}
