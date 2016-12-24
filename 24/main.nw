@@ -1,0 +1,285 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 22: Grid Computing}
+
+\begin{document}
+
+\maketitle{}
+
+
+\section{Problem A}
+
+I swear this guy has a hard-on for path finding
+problems...  We're given a maze with a few points
+that we must visit in any order, and the goal
+is to minimze the number of steps to visit all
+points; it doesn't matter if we step on the same
+point multiple times.
+
+\section{Solution A}
+
+The input for this problem has only 8 points to
+visit, including the initial 0 node.
+This means there are only 5040 ways to visit
+the nodes 1 to 7, a rather small number
+of permutations on a modern machine.
+Therefore, I will adopt the following approach:
+\begin{itemize}
+\item For each node $n$ from 0 to 7,
+      run a BFS starting at $n$;
+      the return value gives the distance from $n$
+      to the other points of interest.
+\item Generate all the permutations for the
+      list $[1,2,3,4,5,6,7]$.
+\item For each permutation $p$, compute the sum
+      of the distances from 0 to $p_1$, $p_1$ to $p_2$,
+      etc.
+\item Display the minimum distance.
+\item (Hope that day 25 is not another path finding problem.)
+\end{itemize}
+
+\subsection{Graph}
+
+\paragraph{Representation}
+Once again we'll need a data structure for our graph.
+In addition to the adjacency list, the graph will
+contain a mapping between the points of interest
+and their $x,y$ coordinates.
+
+<<data structures>>=
+type Node = (usize, usize);
+
+struct Graph {
+    coords: HashMap<usize, Node>,
+    neighbors: HashMap<Node, Vec<Node>>,
+}
+@
+
+\paragraph{Parsing}
+Another day, another ad-hoc parsing routine.
+The main function sends the input as a vector
+of rows of bytes.
+
+<<functions>>=
+fn parse(rows: &Vec<Vec<u8>>) -> Graph {
+    let mut g = Graph {
+        coords: HashMap::new(),
+        neighbors: HashMap::new()
+    };
+    for i in 1 .. rows.len() - 1 {
+        for j in 1 .. rows[i].len() - 1 {
+            if rows[i][j] == b'#' { continue; }
+            if rows[i][j] >= b'0' && rows[i][j] <= b'9' {
+                g.coords.insert((rows[i][j] - b'0') as usize, (i,j));
+            }
+            let mut v = Vec::new();
+            if rows[i-1][j] != b'#' { v.push((i-1, j)); }
+            if rows[i+1][j] != b'#' { v.push((i+1, j)); }
+            if rows[i][j-1] != b'#' { v.push((i, j-1)); }
+            if rows[i][j+1] != b'#' { v.push((i, j+1)); }
+            g.neighbors.insert((i, j), v);
+        }
+    }
+    return g;
+}
+@
+
+\subsection{Searching}
+In the previous problems, I bailed out as soon as reached my target;
+here we have multiple targets and we could bail out early.  I'll
+wait and see if it's necessary for performance, otherwise I'll just
+let the algorithm run its course.
+
+<<functions>>=
+fn bfs(g: &Graph, start_node: usize) -> HashMap<usize, usize> {
+    let mut queue = VecDeque::new();
+    let mut dist = HashMap::new();
+
+    let origin = g.coords.get(&start_node).unwrap();
+    queue.push_front(origin);
+    dist.insert(origin, 0);
+
+    while !queue.is_empty() {
+        let curr = queue.pop_back().expect("empty queue");
+        let d = *dist.get(curr).expect("no distance");
+        for neighbor in g.neighbors.get(curr).unwrap().iter() {
+            if dist.contains_key(&neighbor) { continue; }
+            dist.insert(neighbor, 1 + d);
+            queue.push_front(neighbor);
+        }
+    }
+    let mut ret = HashMap::new();
+    for (node, coord) in g.coords.iter() {
+        ret.insert(*node, *dist.get(coord).unwrap());
+    }
+    return ret;
+}
+@
+
+\subsection{Generating permutations}
+We saw how to generate permutations
+a few days ago, so I'll just copy
+the code.
+
+<<functions>>=
+fn permute(input: &Vec<usize>) -> Vec<Vec<usize>> {
+    if input.is_empty() {
+        return vec![vec![]];
+    } else {
+        let n = input.len();
+        let mut out = Vec::new();
+        let mut copy = input.clone();
+        let x = copy.remove(0);
+        let perms = permute(&copy);
+        for i in 0 .. perms.len() {
+            for j in 0 .. perms[i].len() {
+                let mut copy2 = perms[i].clone();
+                copy2.insert(j, x);
+                out.push(copy2);
+            }
+            let mut copy2 = perms[i].clone();
+            copy2.push(x);
+            out.push(copy2);
+        }
+        return out;
+    }
+}
+@
+
+\subsection{Solving A}
+
+We finally can solve part A by
+putting all the parts together.
+
+With our graph set up and ready
+to go, we run BFS, using nodes
+0, 1, ..., 7 as the origins.
+We keep the distances in a
+vector for usage later.
+
+<<functions>>=
+fn solve_a(g: &Graph) -> usize {
+    let mut dists = Vec::new();
+
+    for i in 0 .. g.coords.len() {
+        dists.push(bfs(g, i));
+    }
+
+    let steps: Vec<usize> = (1 .. g.coords.len()).collect();
+    let perms = permute(&steps);
+
+    let mut min = usize::max_value();
+
+    for p in perms {
+        // Sum
+        let mut curr_dist = 0;
+        let mut prev = 0;
+
+        for k in p.iter() {
+            curr_dist += *dists[prev].get(k).unwrap();
+            prev = *k;
+        }
+
+        if curr_dist < min {
+            min = curr_dist;
+        }
+    }
+
+    return min;
+}
+@
+
+\section{Problem B}
+
+Part B asks us to be inconspicuous
+and put the robot back in place.
+We can take the solution for A
+and scoot from our last point
+back to 0 using the shortest
+path (found in the [[dists]] vector).
+
+<<functions>>=
+fn solve_b(g: &Graph) -> usize {
+    let mut dists = Vec::new();
+
+    for i in 0 .. g.coords.len() {
+        dists.push(bfs(g, i));
+    }
+
+    let steps: Vec<usize> = (1 .. g.coords.len()).collect();
+    let perms = permute(&steps);
+
+    let mut min = usize::max_value();
+
+    for p in perms {
+        // Sum
+        let mut curr_dist = 0;
+        let mut prev = 0;
+
+        for k in p.iter() {
+            curr_dist += *dists[prev].get(k).unwrap();
+            prev = *k;
+        }
+        curr_dist += *dists[p[p.len() - 1]].get(&0).unwrap();
+
+        if curr_dist < min {
+            min = curr_dist;
+        }
+    }
+
+    return min;
+}
+@
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+use std::collections::{VecDeque, HashMap};
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut rows = Vec::new();
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        rows.push(buf.clone().into_bytes());
+        buf.clear();
+    }
+    let mut g = parse(&rows);
+
+    println!("A: {}", solve_a(&g));
+    println!("B: {}", solve_b(&g));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+
+
+\end{appendices}
+
+\end{document}
