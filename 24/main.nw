@@ -9,7 +9,7 @@
 \usepackage[title]{appendix}
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
-\title{Day 22: Grid Computing}
+\title{Day 24: Air Duct Spelunking}
 
 \begin{document}
 
@@ -20,10 +20,11 @@
 
 I swear this guy has a hard-on for path finding
 problems...  We're given a maze with a few points
-that we must visit in any order, and the goal
-is to minimze the number of steps to visit all
-points; it doesn't matter if we step on the same
-point multiple times.
+that we must visit; starting at point 0, we must
+visit, in any order the other points in a minimal
+number of steps.  We can step on a point multiple
+times (i.e., this is not the Traveling Salesman
+Problem).
 
 \section{Solution A}
 
@@ -44,20 +45,19 @@ Therefore, I will adopt the following approach:
       of the distances from 0 to $p_1$, $p_1$ to $p_2$,
       etc.
 \item Display the minimum distance.
-\item (Hope that day 25 is not another path finding problem.)
 \end{itemize}
 
 \subsection{Graph}
 
 \paragraph{Representation}
-Once again we'll need a data structure for our graph.
-In addition to the adjacency list, the graph will
-contain a mapping between the points of interest
-and their $x,y$ coordinates.
+Once again we create a data type for our graph.
+In addition to the adjacency list, the graph
+contains a mapping between the points of interest
+(0, 1, 2, etc.) and their $x,y$ coordinates in
+the graph.
 
 <<data structures>>=
 type Node = (usize, usize);
-
 struct Graph {
     coords: HashMap<usize, Node>,
     neighbors: HashMap<Node, Vec<Node>>,
@@ -66,8 +66,16 @@ struct Graph {
 
 \paragraph{Parsing}
 Another day, another ad-hoc parsing routine.
-The main function sends the input as a vector
-of rows of bytes.
+The main function will read all the data
+into a 2D vector of bytes.
+
+Since the top and bottom rows
+and the left and right columns
+are all walls (represented with a `\#'),
+we can loop only from line 1 to line $m-1$,
+and from column 1 to column $n-1$.
+This avoids any need to check that
+the orthogonal neighbors are in-bounds.
 
 <<functions>>=
 fn parse(rows: &Vec<Vec<u8>>) -> Graph {
@@ -95,9 +103,27 @@ fn parse(rows: &Vec<Vec<u8>>) -> Graph {
 
 \subsection{Searching}
 In the previous problems, I bailed out as soon as reached my target;
-here we have multiple targets and we could bail out early.  I'll
-wait and see if it's necessary for performance, otherwise I'll just
-let the algorithm run its course.
+with multiple targets, I'd need to do a more complex verification
+to know if I can exit the search early.
+Since the input graph is not very large, I will refrain from
+trying to break early and will let the algorithm finish its
+whole course.
+
+(\textbf{Update:} completing the search is indeed
+fast enough, and there is no need to revisit this
+decision.)
+
+The [[bfs]] functions maintains two data structures:
+a queue of $x,y$ coordinates to visit,
+and a map between an $x,y$ coordinate and
+its distance to the start node.
+
+Once the distances for \emph{all} the
+points in the graph have been computed,
+we use the graph's [[coords]] to extract
+and return only the distances between
+the start node and the other nodes of
+interest.
 
 <<functions>>=
 fn bfs(g: &Graph, start_node: usize) -> HashMap<usize, usize> {
@@ -135,7 +161,6 @@ fn permute(input: &Vec<usize>) -> Vec<Vec<usize>> {
     if input.is_empty() {
         return vec![vec![]];
     } else {
-        let n = input.len();
         let mut out = Vec::new();
         let mut copy = input.clone();
         let x = copy.remove(0);
@@ -157,14 +182,30 @@ fn permute(input: &Vec<usize>) -> Vec<Vec<usize>> {
 
 \subsection{Solving A}
 
-We finally can solve part A by
+We can now solve part A by
 putting all the parts together.
 
+The [[main]] function will read
+the data from the input file and
+create the graph.
+
 With our graph set up and ready
-to go, we run BFS, using nodes
-0, 1, ..., 7 as the origins.
-We keep the distances in a
-vector for usage later.
+to go, we run BFS multiple times,
+using nodes 0, 1, ..., 7 as the origins.
+We keep the maps of distances in a vector;
+the map in [[dists[i]]] contains the
+maps that gives the distances between the
+point $i$ and the other nodes of interest.
+
+Once we have all the distances,
+we use [[permute]] to compute all
+the differents orders in which the nodes
+1 ... $n-1$ can be visited.
+We compute the length of the total path,
+and keep the minimum.
+
+When we have the minimal path length to
+visit all the nodes, we return it.
 
 <<functions>>=
 fn solve_a(g: &Graph) -> usize {
@@ -260,26 +301,11 @@ fn main() {
         rows.push(buf.clone().into_bytes());
         buf.clear();
     }
-    let mut g = parse(&rows);
+    let g = parse(&rows);
 
     println!("A: {}", solve_a(&g));
     println!("B: {}", solve_b(&g));
 }
 @
-
-\begin{appendices}
-
-\section{}
-
-<<*>>=
-#[cfg(test)]
-mod test {
-    <<unit tests>>
-}
-@
-
-
-
-\end{appendices}
 
 \end{document}
