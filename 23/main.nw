@@ -1,0 +1,390 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 23: Safe Cracking}
+
+\begin{document}
+
+\maketitle{}
+
+
+\section{Problem A}
+
+Oh yes, another Assembunny problem!
+Much more fun than all those md5 and
+path finding problems if you ask me!
+
+The problem is basically the same,
+execute the instructions, find the
+value of the $a$ register, print it.
+The one twist is the addition of
+a new, code-modifying instruction:
+[[tgl]].  This instruction modifies
+an instruction in the program
+(e.g., a [[inc]] becomes a [[dec]], etc.)
+
+
+\section{Solution A}
+
+The problem statement says that we
+can reuse the interpreter from day
+12 without changes, however I do
+not believe this applies to me:
+I wrote the data structure for the
+instructions in such a way that
+invalid instructions can never be
+constructed.  However today's problem
+requires that I be able to create
+invalid instructions (and skip them).
+
+\subsection{Operands and Instructions}
+
+\paragraph{Representation}
+For day 12, we used 6 enum items to
+represent 4 instructions to distinguish,
+for example, copying an immediate into
+a register vs. copying a register into
+another register.
+
+Today, we'll use 5 enum items for the
+5 instructions and their parameters are
+of the type [[Operand]] which can either
+represent a register or an immediate value.
+
+<<data structures>>=
+#[derive(Clone, Copy)]
+enum Operand {
+    Reg(usize),
+    Imm(i64)
+}
+
+impl Operand {
+    <<operand methods>>
+}
+
+#[derive(Clone)]
+enum Instr {
+    Cpy(Operand, Operand),
+    Inc(Operand),
+    Dec(Operand),
+    Jnz(Operand, Operand),
+    Tgl(Operand)
+}
+
+impl Instr {
+    <<instruction methods>>
+}
+@
+
+\paragraph{Instruction validity}
+Our new representation for instructions
+is more flexible, however it allows
+invalid instructions to be created.
+Let's write a method to ensure that
+an instruction is well-formed.
+
+First we'll add a couple methods to check
+if an [[Operand]] is a register or an immediate.
+
+<<operand methods>>=
+fn is_reg(&self) -> bool {
+    match *self {
+        Operand::Reg(_) => true,
+        Operand::Imm(_) => false
+    }
+}
+
+fn is_imm(&self) -> bool {
+    !self.is_reg()
+}
+@
+
+Then we can check that the arguments
+to an instruction are correct.
+[[Dec]] and [[Inc]] only accept a register argument;
+[[Cpy]]'s first argument can be either a register
+or an immediate, but the second argument must be a register;
+[[Jnz]]'s two arguments can be either registers or immediates;
+[[Tgl]]'s argument can be either a register or an immediate.
+
+<<instruction methods>>=
+fn is_valid(&self) -> bool {
+    match *self {
+        Instr::Inc(ref reg) => reg.is_reg(),
+        Instr::Dec(ref reg) => reg.is_reg(),
+        Instr::Cpy(_, ref dst) => dst.is_reg(),
+        Instr::Jnz(_, _) => true,
+        Instr::Tgl(_) => true,
+    }
+}
+@
+
+
+\paragraph{Parsing}
+The [[parse]] function from day 12
+has all the structure we need to parse
+an instruction; we just need to
+modify the return values to match
+our new [[Instr]] structure and
+add a case for [[tgl]].
+
+<<instruction methods>>=
+fn from_str(s: &str) -> Instr {
+    let tokens = s.split_whitespace().collect::<Vec<&str>>();
+    match tokens[0] {
+        "cpy" => {
+            let src = reg_or_imm(tokens[1]);
+            let dst = reg(tokens[2]);
+            Instr::Cpy(src, dst)
+        }
+        "inc" => {
+            let reg = reg(tokens[1]);
+            Instr::Inc(reg)
+        }
+        "dec" => {
+            let reg = reg(tokens[1]);
+            Instr::Dec(reg)
+        }
+        "jnz" => {
+            let cond = reg_or_imm(tokens[1]);
+            let targ = reg_or_imm(tokens[2]);
+            Instr::Jnz(cond, targ)
+        }
+        "tgl" => {
+            let offset = reg_or_imm(tokens[1]);
+            Instr::Tgl(offset)
+        }
+        ins => {
+            panic!("unknown instruction: {}", ins)
+        }
+    }
+}
+@
+
+We also bring in [[reg_to_num]] to convert an alphabetical register
+name to a 0-based index, and we create the new functions [[reg_or_imm]]
+which tries to read an operand as a register first, then as an immediate,
+and [[reg]] which tries to read an operand as a register and panics
+otherwise.
+
+<<functions>>=
+fn reg_to_num(s: &str) -> Option<usize> {
+    match s {
+        "a" => Some(0),
+        "b" => Some(1),
+        "c" => Some(2),
+        "d" => Some(3),
+        _   => None
+    }
+}
+
+fn reg(s: &str) -> Operand {
+    match reg_to_num(s) {
+        Some(r) => Operand::Reg(r),
+        None => panic!("not a register")
+    }
+}
+
+fn reg_or_imm(s: &str) -> Operand {
+    match reg_to_num(s) {
+        Some(r) => Operand::Reg(r),
+        None => Operand::Imm(s.parse::<i64>().unwrap())
+    }
+}
+@
+
+
+\subsection{The CPU}
+
+\paragraph{Representation}
+The CPU representation can stay the same
+as in day 12, so we'll copy and paste.
+
+<<data structures>>=
+struct Cpu {
+    regs: [i64; 4], // Instead of the names a,b,c,d we'll use 0,1,2,3
+    pc: usize
+}
+
+impl Cpu {
+    fn jump(&mut self, cond: i64, offset: i64) {
+        if cond == 0 {
+            self.pc += 1;
+        } else {
+            let pc = self.pc as i64 + offset;
+            self.pc = pc as usize;
+        }
+    }
+}
+@
+
+\subsection{Execution}
+
+\paragraph{Toggling instructions}
+Before we get to the core of the CPU's execution,
+let's build a function to toggle instructions.  The
+rules are (as usual, I guess) arcane and arbitrary:
+
+\begin{itemize}
+\item [[Inc]] becomes [[Dec]];
+\item [[Dec]] and [[Tgl]] become [[Inc]];
+\item [[Jnz]] becomes [[Cpy]];
+\item [[Cpy]] becomes [[Jnz]].
+\end{itemize}
+
+<<instruction methods>>=
+fn toggle(&self) -> Instr {
+    match *self {
+        Instr::Inc(a) => Instr::Dec(a),
+        Instr::Dec(a)
+        | Instr::Tgl(a) => Instr::Inc(a),
+        Instr::Cpy(a, b) => Instr::Jnz(a, b),
+        Instr::Jnz(a, b) => Instr::Cpy(a, b),
+    }
+}
+@
+
+
+\paragraph{Execution}
+In day 12, we could execute instructions by only
+considering the state of the CPU and the current
+instruction.  Since the [[tgl]] instruction
+modifies the code, we now need to also pass
+the vector of instructions to the execution function.
+
+<<functions>>=
+fn execute(cpu: &mut Cpu, instrs: &mut Vec<Instr>) {
+    use Instr::*;
+    use Operand::*;
+    while cpu.pc < instrs.len() {
+        if !instrs[cpu.pc].is_valid() {
+            cpu.pc += 1;
+            continue;
+        }
+
+        match instrs[cpu.pc] {
+            Inc(Reg(r)) => { cpu.regs[r] += 1; cpu.pc += 1; }
+            Dec(Reg(r)) => { cpu.regs[r] -= 1; cpu.pc += 1; }
+            Cpy(Imm(i), Reg(r)) => { cpu.regs[r] = i; cpu.pc += 1; }
+            Cpy(Reg(i), Reg(r)) => { cpu.regs[r] = cpu.regs[i]; cpu.pc += 1; }
+            Jnz(Imm(i), Imm(offset)) => {
+                cpu.jump(i, offset);
+            }
+            Jnz(Imm(i), Reg(r)) => {
+                let offset = cpu.regs[r];
+                cpu.jump(i, offset);
+            }
+            Jnz(Reg(r), Imm(offset)) => {
+                let i = cpu.regs[r];
+                cpu.jump(i, offset);
+            }
+            Jnz(Reg(r1), Reg(r2)) => {
+                let i = cpu.regs[r1];
+                let offset = cpu.regs[r2];
+                cpu.jump(i, offset);
+            }
+            Tgl(Imm(i)) => {
+                let index = (cpu.pc as i64 + i) as usize;
+                if index < instrs.len() {
+                    instrs[index] = instrs[index].toggle();
+                }
+                cpu.pc += 1;
+            }
+            Tgl(Reg(r)) => {
+                let i = cpu.regs[r];
+                let index = (cpu.pc as i64 + i) as usize;
+                if index < instrs.len() {
+                    instrs[index] = instrs[index].toggle();
+                }
+                cpu.pc += 1;
+            }
+            _ => { panic!("invalid instruction"); }
+        }
+    }
+}
+@
+
+
+<<unit tests>>=
+#[test]
+fn test_execute() {
+    use super::{Instr, Cpu, execute};
+    let mut cpu = Cpu { regs: [0,0,0,0], pc: 0 };
+    let mut instrs = vec![
+        Instr::from_str("cpy 2 a"),
+        Instr::from_str("tgl a"),
+        Instr::from_str("tgl a"),
+        Instr::from_str("tgl a"),
+        Instr::from_str("cpy 1 a"),
+        Instr::from_str("dec a"),
+        Instr::from_str("dec a"),
+    ];
+    execute(&mut cpu, &mut instrs);
+    assert_eq!(3, cpu.regs[0]);
+}
+@
+
+\section{Problem B}
+
+Change the initial value of register $a$
+from 7 to 12 and run again.  Someone using
+a slow language like Python would likely
+need to implement a peephole optimizer,
+but 15s in Rust is plenty fast enough.
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut instrs = Vec::new();
+
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        instrs.push(Instr::from_str(&buf));
+        buf.clear();
+    }
+
+    let mut cpu_a = Cpu { regs: [7,0,0,0], pc: 0 };
+    let mut instrs_a = instrs.clone();
+    execute(&mut cpu_a, &mut instrs_a);
+    println!("A: {}", cpu_a.regs[0]);
+
+    let mut cpu_b = Cpu { regs: [12,0,0,0], pc: 0 };
+    let mut instrs_b = instrs.clone();
+    execute(&mut cpu_b, &mut instrs_b);
+    println!("B: {}", cpu_b.regs[0]);
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+
+
+\end{appendices}
+
+\end{document}
