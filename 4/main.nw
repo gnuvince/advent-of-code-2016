@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 4: Security Through Obscurity}
+\date{4 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

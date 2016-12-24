@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 12: Leonardo's Monorail}
+\date{12 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

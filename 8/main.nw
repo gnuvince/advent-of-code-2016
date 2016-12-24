@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 8: Two-Factor Authentication}
+\date{8 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

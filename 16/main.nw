@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 16: Dragon Checksum}
+\date{16 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 13: A Maze of Twisty Little Cubicles}
+\date{13 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

@@ -10,6 +10,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 20: Firewall Rules}
+\date{20 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 14: One-Time Pad}
+\date{14 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

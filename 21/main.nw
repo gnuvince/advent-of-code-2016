@@ -10,6 +10,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 21: Scrambled Letters and Hash}
+\date{21 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

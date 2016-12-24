@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 6: Signals and Noise}
+\date{6 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 

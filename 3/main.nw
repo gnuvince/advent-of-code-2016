@@ -9,6 +9,8 @@
 \usepackage[colorlinks,linkcolor=blue]{hyperref}
 
 \title{Day 3: Squares With Three Sides}
+\date{3 December 2016}
+\author{Vincent Foley}
 
 \begin{document}
 
