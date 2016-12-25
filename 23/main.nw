@@ -336,11 +336,15 @@ fn test_execute() {
 
 \section{Problem B}
 
-Change the initial value of register $a$
-from 7 to 12 and run again.  Someone using
-a slow language like Python would likely
-need to implement a peephole optimizer,
-but 15s in Rust is plenty fast enough.
+We change the initial value of register $a$
+from 7 to 12 and run again.  The problem
+has some cryptic hint about multriplication
+that I did not understand, so I headed to
+the subreddit where someone explained we need
+to implement a peephole optimization to
+speed up the program.  When I alt-tabbed
+into my terminal again, the program was
+done running anyway...
 
 
 \section{Putting it all together}
