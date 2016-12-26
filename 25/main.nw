@@ -1,0 +1,373 @@
+\documentclass{article}
+
+\usepackage{noweb}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage[title]{appendix}
+\usepackage[colorlinks,linkcolor=blue]{hyperref}
+
+\title{Day 25: Clock Signal}
+\date{25 December 2016}
+\author{Vincent Foley}
+
+\begin{document}
+
+\maketitle{}
+
+\section{Problem A}
+
+At last, the final day of the Advent of Code!
+And what a nice present that it is another
+Assembunny puzzle!
+
+In today's problem, we have an Assembunny
+program (with an extra instruction, [[out]])
+and we need to figure out the smallest
+initial value for register $a$ such that
+the output of the program is an infinite
+string of alternating zeros and ones,
+i.e., $0, 1, 0, 1, 0, 1, \ldots$
+
+\section{Solution A}
+
+How do we know that the value we gave
+to register $a$ produces an infinite
+pattern of zeros and ones?  Certainly
+checking that the pattern exists up
+until a given length is unsatisfactory,
+so we'll have to be more clever.
+
+Here's my idea: we can keep track of
+the state of CPU.  Suppose we output
+a 0 and let us call this state $S_0$.
+When an output is performed next,
+if the output value is 1, we know that
+$S_0$ brings us into another state, $S_1$,
+that outputs a 1.  If the next time we
+output a number, the state is equal to $S_0$,
+we know we have a cycle!
+(Note: we definitely have a cycle because
+there is no self-modifying code in this
+problem.)
+
+Now, it is possible the the cycle is not
+2 in length: for instance, it's possible
+that 4 CPU states form the cycle
+($S_0 \to S_1 \to S_2 \to S_3 \to S_0 \to \ldots$).
+
+Thus our approach for part A will be:
+\begin{enumerate}
+\item Parse the instructions;
+\item Create a CPU with $a = 0$;
+\item Execute the instructions, saving
+    the state of the CPU each time an
+    output is performed;
+\item If the output is not the expected
+    value, increment $a$ and go to 2;
+\item If the current state has been
+    seen before, output $a$ and terminate.
+\end{enumerate}
+
+\subsection{The instructions and the CPU}
+
+The instructions and the CPU data structures
+are going to be mostly the same as in day 12,
+but with two notable changes%
+\footnote{We don't implement the [[tgl]] instruction today.}%
+: a new instruction, [[out]], is added to the
+instructions and accepts a register parameter;
+a new CPU field, [[output]], will contain the
+result of the [[out]] instruction.
+
+We add the [[PartialEq]] trait for
+the CPU to compare different states, and
+[[Clone]] to make a full copy of the state.
+
+<<data structures>>=
+#[derive(PartialEq, Clone, Debug)]
+struct Cpu {
+    regs: [i64; 4], // Instead of the names a,b,c,d we'll use 0,1,2,3
+    pc: usize,
+    output: i64
+}
+
+impl Cpu {
+    <<cpu methods>>
+}
+@
+
+As before, we have our [[adjust_pc]]
+method to move the $pc$ register by
+either a positive or negative amount.
+
+<<cpu methods>>=
+fn adjust_pc(&mut self, offset: isize) {
+    let magnitude = offset.abs() as usize();
+    if offset < 0 {
+        self.pc -= magnitude;
+    } else {
+        self.pc += magnitude;
+    }
+}
+@
+
+
+<<data structures>>=
+enum Instr {
+    CpyImm(i64, usize),
+    CpyReg(usize, usize),
+    Inc(usize),
+    Dec(usize),
+    JnzImm(i64, isize),
+    JnzReg(usize, isize),
+    Out(usize)
+}
+
+impl Instr {
+    <<instruction methods>>
+}
+@
+
+\subsection{Executing instructions}
+
+The [[execute]] method is copied
+verbatim from day 12, with the addition
+of the execution of [[out]].
+
+<<cpu methods>>=
+fn execute(&mut self, instr: &Instr) {
+    match *instr {
+        Instr::CpyImm(val, reg) => {
+            self.regs[reg] = val;
+            self.pc += 1;
+        }
+        Instr::CpyReg(src, dst) => {
+            self.regs[dst] = self.regs[src];
+            self.pc += 1;
+        }
+        Instr::Inc(reg) => {
+            self.regs[reg] += 1;
+            self.pc += 1;
+        }
+        Instr::Dec(reg) => {
+            self.regs[reg] -= 1;
+            self.pc += 1;
+        }
+        Instr::JnzImm(imm, offset) => {
+            if imm != 0 {
+                self.adjust_pc(offset);
+            } else {
+                self.pc += 1;
+            }
+        }
+        Instr::JnzReg(reg, offset) => {
+            if self.regs[reg] != 0 {
+                self.adjust_pc(offset);
+            } else {
+                self.pc += 1;
+            }
+        }
+        Instr::Out(reg) => {
+            self.output = self.regs[reg];
+            self.pc += 1;
+        }
+    }
+}
+@
+
+
+\subsection{Parsing the instructions}
+
+This section is going to look extremely
+familiar to anyone who's read the programs
+for day 12 or day 23.  Feel free to skip it.
+
+<<functions>>=
+fn reg_to_num(s: &str) -> Option<usize> {
+    match s {
+        "a" => Some(0),
+        "b" => Some(1),
+        "c" => Some(2),
+        "d" => Some(3),
+        _   => None
+    }
+}
+@
+
+<<instruction methods>>=
+fn from_str(s: &str) -> Instr {
+    let tokens = s.split_whitespace().collect::<Vec<&str>>();
+    match tokens[0] {
+        "cpy" => {
+            <<parse cpy instruction>>
+        }
+        "inc" => {
+            let reg = reg_to_num(tokens[1]).expect("inc, not a reg");
+            Instr::Inc(reg)
+        }
+        "dec" => {
+            let reg = reg_to_num(tokens[1]).expect("dec, not a reg");
+            Instr::Dec(reg)
+        }
+        "jnz" => {
+            <<parse jnz instruction>>
+        }
+        "out" => {
+            let reg = reg_to_num(tokens[1]).expect("dec, not a reg");
+            Instr::Out(reg)
+        }
+        ins => {
+            panic!("unknown instruction: {}", ins)
+        }
+    }
+}
+@
+
+
+<<parse cpy instruction>>=
+let dst = reg_to_num(tokens[2]).expect("cpy, not a reg");
+match reg_to_num(tokens[1]) {
+    Some(src) => {
+        Instr::CpyReg(src, dst)
+    }
+    None => {
+        let imm = tokens[1].parse::<i64>().expect("cpy, not an imm");
+        Instr::CpyImm(imm, dst)
+    }
+}
+@
+
+
+<<parse jnz instruction>>=
+let targ = tokens[2].parse::<isize>().expect("jnz, not an imm");
+match reg_to_num(tokens[1]) {
+    Some(reg) => {
+        Instr::JnzReg(reg, targ)
+    }
+    None => {
+        let cond = tokens[1].parse::<i64>().expect("jnz, not an imm");
+        Instr::JnzImm(cond, targ)
+    }
+}
+@
+
+\subsection{Solving part A}
+
+\paragraph{Overview}
+To implement the strategy outlined
+at the beginning of this section,
+we'll write a function called [[solve_a]]
+which accepts the instructions
+parsed in the [[main]] function
+and returns the smallest value for $a$
+that produces an alternating signal.
+
+
+<<functions>>=
+fn solve_a(instrs: &[Instr]) -> i64 {
+    let mut a = 0_i64;
+    loop {
+        <<variable initialization>>
+        <<execution loop, return if found>>
+        a += 1;
+    }
+}
+@
+
+\paragraph{Initialization}
+Every iteration begins by initializing
+a new CPU, using the current value for $a$.
+We also have a variable, [[expected_output]],
+which contains the output we want the next
+[[out]] instruction to produce.
+
+<<variable initialization>>=
+let mut cpu = Cpu {
+    regs: [a, 0, 0, 0],
+    pc: 0,
+    output: 0,
+};
+let mut expected_output = 0_i64;
+let mut seen = Vec::new();
+@
+
+\paragraph{Execution loop}
+
+Execution is similar to what
+we wrote for day 12, however
+we perform extra steps when
+a [[out]] instruction is
+executed: we check that the
+output matches what we expect,
+we verify if we've already seen
+the state, exiting if we have,
+and recording the current state
+otherwise.
+
+<<execution loop, return if found>>=
+loop {
+    let pc = cpu.pc;
+    if pc >= instrs.len() { break; }
+    let instr = &instrs[pc];
+
+    match *instr {
+        Instr::Out(_) => {
+            cpu.execute(instr);
+            if cpu.output != expected_output {
+                break;
+            }
+
+            if seen.contains(&cpu) {
+                return a;
+            }
+
+            seen.push(cpu.clone());
+            expected_output = 1 - expected_output;
+        }
+        _ => {
+            cpu.execute(instr);
+        }
+    }
+}
+@
+
+
+
+
+\section{Putting it all together}
+
+<<*>>=
+use std::io;
+
+<<data structures>>
+<<functions>>
+
+#[cfg(not(test))]
+fn main() {
+    let stdin = io::stdin();
+    let mut buf = String::new();
+    let mut instrs = Vec::new();
+    while stdin.read_line(&mut buf).unwrap() > 0 {
+        instrs.push(Instr::from_str(&buf));
+        buf.clear();
+    }
+    println!("A: {}", solve_a(&instrs));
+}
+@
+
+\begin{appendices}
+
+\section{}
+
+<<*>>=
+#[cfg(test)]
+mod test {
+    <<unit tests>>
+}
+@
+
+\end{appendices}
+
+\end{document}

@@ -1,0 +1,6 @@
+out a
+jnz a 3
+cpy 1 a
+jnz 1 -3
+cpy 0 a
+jnz 1 -5
