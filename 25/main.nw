@@ -41,7 +41,9 @@ so we'll have to be more clever.
 
 Here's my idea: we can keep track of
 the state of CPU.  Suppose we output
-a 0 and let us call this state $S_0$.
+a 0; let us call the current state of
+the CPU (i.e., the values in the registers)
+$S_0$.
 When an output is performed next,
 if the output value is 1, we know that
 $S_0$ brings us into another state, $S_1$,
@@ -61,11 +63,13 @@ Thus our approach for part A will be:
 \begin{enumerate}
 \item Parse the instructions;
 \item Create a CPU with $a = 0$;
-\item Execute the instructions, saving
-    the state of the CPU each time an
-    output is performed;
+\item Execute the instructions,
+    until the next [[out]];
 \item If the output is not the expected
-    value, increment $a$ and go to 2;
+    value, increment $a$ and go to 3;
+\item If the current state has not been
+    seen before, add it to the list, and
+    continue execution;
 \item If the current state has been
     seen before, output $a$ and terminate.
 \end{enumerate}
@@ -113,6 +117,14 @@ fn adjust_pc(&mut self, offset: isize) {
 }
 @
 
+Since we don't have self-modifying code
+today, we can re-use the representation
+that disallows invalid instructions.
+
+Although it would make sense to output
+an immediate value, since the input
+program only outputs a register, we'll
+limit ourselves to that case.
 
 <<data structures>>=
 enum Instr {
@@ -281,7 +293,14 @@ Every iteration begins by initializing
 a new CPU, using the current value for $a$.
 We also have a variable, [[expected_output]],
 which contains the output we want the next
-[[out]] instruction to produce.
+[[out]] instruction to produce, and a vector,
+[[seen]], containing the states of the CPU
+when an output was performed.
+
+A vector is not great for lookup performance
+($O(n)$), however since this program finds
+the answer in a few milliseconds, a more
+appropriate data structure is not necessary.
 
 <<variable initialization>>=
 let mut cpu = Cpu {

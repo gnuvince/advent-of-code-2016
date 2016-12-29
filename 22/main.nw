@@ -76,6 +76,12 @@ fn test_parse() {
 
 \paragraph{Finding viable pairs}
 
+The problem states quite clearly what a viable
+pair is: two disks, $D_1$ and $D_2$, where
+$D_1 \ne D_2$,
+$D_1$ is not empty (i.e., used is greater than 0),
+and $D_1$'s data fits completely in $D_2$.
+
 <<functions>>=
 fn viable_pair(d1: &Disk, d2: &Disk) -> bool {
     d1.id != d2.id && d1.used > 0 && d1.used <= d2.avail
@@ -102,6 +108,12 @@ fn test_viable_pair() {
     assert_eq!(false, viable_pair(&d3, &d3));
 }
 @
+
+\paragraph{Solving part A}
+
+We can find the total number of viable pairs
+in $O(n^2)$ by invoking the [[viable_pair]]
+function between every pair of disks.
 
 <<functions>>=
 fn solve_a(disks: &[Disk]) -> usize {
@@ -136,177 +148,48 @@ Ah, now we get to the serious stuff.
 We want to bring the content from
 node $\langle x=max_x, y=0 \rangle$
 to node $\langle x=0, y=0 \rangle$
-with the fewest amount of moves.
+in the fewest number of moves.
 
 \paragraph{General approach}
-My (initial) approach will be similar to day 11,
-with a small change: since we don't know the
-exact state that we will have at the end, i.e.,
-how much used/available space each node has, we
-will include a token with the payload of
-$\langle x=max_x, y=0 \rangle$, and the BFS
-will be over when the token reaches node
-$\langle x=0, y=0 \rangle$.
 
-Also, we'll create a graph (adjacency list)
-of the nodes that we'll keep updated as we
-move content from nodes to nodes.
+So I spent way too much time
+and effort trying to solve this
+problem as a path finding problem.
 
-\paragraph{Graph structure}
-Let's write a function to convert
-our vector of nodes to a graph.
-We'll proceed in two steps:
-(1) add all the nodes to a hash
-table with an empty vector of
-neighbors;
-(2) for each node, add their
-orthogonal neighbors if they
-are keys in the table.
+Since all nodes are too full to have
+more than one hole at a time, this
+is basically a 15-puzzle.  The
+following function prints it out
+(the hashes are pieces that can never move)
+and then I just manually counted how
+many steps it takes to get the empty
+node to the top-right node, then how many steps
+it takes to bring the payload all the
+way to the left, and used Emacs'
+calc-mode to get the answer, 252.
 
 <<functions>>=
-type NodeId = (isize, isize);
-type NodeInfo = (Disk, bool, Vec<NodeId>);
-
-fn create_graph(disks: &[Disk]) -> HashMap<NodeId, NodeInfo> {
-    let mut g = HashMap::new();
-    for disk in disks {
-        g.insert(disk.id, (disk.clone(), false, vec![]));
-    }
-    for disk in disks {
-        let (x,y) = disk.id;
-        let mut neighbors = vec![];
-        if g.contains_key(&(x-1, y)) { neighbors.push((x-1, y)); }
-        if g.contains_key(&(x+1, y)) { neighbors.push((x+1, y)); }
-        if g.contains_key(&(x, y-1)) { neighbors.push((x, y-1)); }
-        if g.contains_key(&(x, y+1)) { neighbors.push((x, y+1)); }
-        let mut entry = g.get_mut(&(x, y)).unwrap();
-        entry.2 = neighbors;
-    }
-    return g;
-}
-@
-
-\paragraph{Setting the token}
-The token is a boolean; it is [[true]]
-if a node has it, [[false]] otherwise.
-In the [[create_graph]] function, we
-gave the value [[false]] to every
-single node.  Let's now give the token
-to the right-most node of the top row.
-
-<<functions>>=
-fn set_token(g: &mut HashMap<NodeId, NodeInfo>) {
-    let mut x = 0;
-    loop {
-        if g.contains_key(&(x+1, 0)) {
-            x += 1;
-        } else {
-            break;
+fn show2(disks: &[Disk]) {
+    for y in 0 .. 28 {
+        for x in 0 .. 38 {
+            let idx = y + x * 28;
+            let used = disks[idx].used;
+            if idx == 0 { print!("G"); }
+            else if y == 0 && x == 37 { print!("!"); }
+            else if used == 0 { print!("_"); }
+            else if used < 400 { print!("."); }
+            else { print!("#"); }
         }
-    }
-    let entry = g.get_mut(&(x, 0)).unwrap();
-    entry.1 = true;
-}
-@
-
-\paragraph{Moving data}
-Our function to move data assumes that the
-target node has sufficient available memory
-(we'll use the [[viable_pair]] function to
-test this later).
-
-<<functions>>=
-fn move_data(g: &mut HashMap<NodeId, NodeInfo>, src: &NodeId, dst: &NodeId) {
-    let tok;
-    let move_size;
-    {
-        let mut info = g.get_mut(&src).unwrap();
-        move_size = info.0.used;
-        info.0.avail += move_size;
-        info.0.used = 0;
-        tok = info.1;
-        info.1 = false;
-    }
-    {
-        let mut info = g.get_mut(&dst).unwrap();
-        info.0.avail -= move_size;
-        info.0.used += move_size;
-        info.1 = tok;
+        println!("");
     }
 }
 @
-
-<<unit tests>>=
-#[test]
-fn test_move_data() {
-    use super::{Disk, create_graph, set_token, move_data};
-    let mut g = create_graph(&vec![
-        Disk { id: (0, 0), used: 10, avail: 20 },
-        Disk { id: (1, 0), used: 5, avail: 5 }
-    ]);
-    set_token(&mut g);
-    move_data(&mut g, &(1, 0), &(0, 0));
-    assert_eq!(15, g.get(&(0, 0)).unwrap().0.used);
-    assert_eq!(15, g.get(&(0, 0)).unwrap().0.avail);
-    assert_eq!(true, g.get(&(0, 0)).unwrap().1);
-
-    assert_eq!(0, g.get(&(1, 0)).unwrap().0.used);
-    assert_eq!(10, g.get(&(1, 0)).unwrap().0.avail);
-    assert_eq!(false, g.get(&(1, 0)).unwrap().1);
-}
-@
-
-\paragraph{BFS}
-We can now implement the breadth-first search.
-(Let's hope it doesn't take a billion years like
-my initial stabs at day 11 did.)
-
-<<functions>>=
-fn search(g: &HashMap<NodeId, NodeInfo>) -> isize {
-    let mut queue = VecDeque::new();
-    let mut seen = Vec::new();
-
-    seen.push(g.clone());
-    queue.push_front((0, g.clone()));
-
-    while !queue.is_empty() {
-        let (steps, curr_g) = queue.pop_back().expect("empty queue");
-
-        for (id, info) in curr_g.iter() {
-            for neighbor_id in info.2.iter() {
-                let neighbor_info = curr_g.get(&neighbor_id).unwrap();
-                if viable_pair(&info.0, &neighbor_info.0) {
-                    let mut succ_g = curr_g.clone();
-                    move_data(&mut succ_g, id, neighbor_id);
-                    <<return if finished>>
-                    if !seen.contains(&succ_g) {
-                        seen.push(succ_g.clone());
-                        queue.push_front((steps+1, succ_g));
-                    }
-                }
-            }
-        }
-    }
-    return -1;
-}
-@
-
-<<return if finished>>=
-{
-    let node_info = succ_g.get(&(0, 0)).unwrap();
-    if node_info.1 {
-        return steps+1;
-    }
-}
-@
-
-
 
 \section{Putting it all together}
 
 <<*>>=
 use std::io;
-use std::collections::{VecDeque, HashMap};
+use std::collections::{VecDeque, HashSet};
 
 <<data structures>>
 <<functions>>
@@ -329,9 +212,7 @@ fn main() {
 
     println!("A: {}", solve_a(&disks));
 
-    let mut g = create_graph(&disks);
-    set_token(&mut g);
-    println!("B: {}", search(&g));
+    show2(&disks);
 }
 @
 

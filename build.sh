@@ -23,7 +23,7 @@ build() {
     else
         notangle $1/main.nw > $TMP_DIR/main_$1.rs
         rustc -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1
-        rustc --test -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1_test
+        #rustc --test -O $TMP_DIR/main_$1.rs -o $BIN_DIR/main_$1_test
     fi
 }
 
